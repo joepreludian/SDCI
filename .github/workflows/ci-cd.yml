@@ -45,6 +45,11 @@ jobs:
           toml get --toml-path pyproject.toml project.version > VERSION
           echo "VERSION=$(cat VERSION)" >> $GITHUB_ENV
 
+      - name: Install uv
+        run: |
+          pip install uv
+          uv --version
+
       - name: Deploy to PyPI
         run: |
           uv build
@@ -83,8 +88,8 @@ jobs:
 
       - name: Smoke Tests
         run: |
-          docker-compose up -d sdci-server
-          docker-compose run sdci-client
+          docker compose up -d sdci-server
+          docker compose run sdci-client
           curl -s -o /dev/null -w "%{http_code}" http://localhost:8842/docs || true
           docker compose down
 
