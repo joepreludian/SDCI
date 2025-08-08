@@ -2,9 +2,12 @@ import asyncio
 import logging
 import os
 import time
+from importlib.metadata import version
 
-from .exceptions import SDCIServerException
+from sdci.exceptions import SDCIServerException
+from sdci.settings import TASK_RUN_TIMEOUT_SECONDS
 
+__version__ = version("sdci")
 logger = logging.getLogger(__name__)
 
 
@@ -38,10 +41,11 @@ class CommandRunner:
         logger.info(f"RUNNING TASK WITH CMD: {cmd}")
 
         await self._lock.acquire()
-        logger.info("LOCK ACQUIRED")
+        logger.info("Triggering Task - Lock acquired")
 
-        yield "\n**********\n"
-        yield f"RUNNING: {cmd}"
+        yield f"********** SDCI SERVER v{__version__} **********\n"
+        yield f'RUNNING TASK: "{cmd}": TIMEOUT: {TASK_RUN_TIMEOUT_SECONDS}s\n'
+        yield "********** task logs - start ********** \n\n"
 
         process = await asyncio.create_subprocess_exec(
             *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
@@ -55,7 +59,8 @@ class CommandRunner:
             "status": run_status,
         }
 
-        timeout = time.time() + 12
+        start_time = time.time()
+        timeout = start_time + TASK_RUN_TIMEOUT_SECONDS
         while True:
             output = await process.stdout.readline()
 
@@ -79,6 +84,9 @@ class CommandRunner:
         }
 
         self._lock.release()
-        logger.info("LOCK RELEASED")
+        logger.info("TASK ENDED - Lock released")
 
-        yield f"\n**********\n\nEXITED ({process.returncode})"
+        yield "\n********** task logs - end ********** \n"
+
+        elapsed_time = time.time() - start_time
+        yield f"EXITED ({process.returncode}) - Took {elapsed_time:.2f}s"

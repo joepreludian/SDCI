@@ -5,7 +5,8 @@ import requests
 from requests.exceptions import ChunkedEncodingError, ConnectionError, HTTPError
 
 from sdci.exceptions import SDCIException
-from server import TaskOutputSchema
+from sdci.schemas import TaskOutputSchema
+from sdci.settings import CLIENT_REQUEST_TIMEOUT_SECONDS
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,7 @@ class SDCIClient:
                 if action == "run"
                 else {},
                 stream=action == "run",
+                timeout=CLIENT_REQUEST_TIMEOUT_SECONDS,
             )
         except HTTPError as exc:
             raise SDCIException(f"CLIENT HTTPError: {exc}") from exc

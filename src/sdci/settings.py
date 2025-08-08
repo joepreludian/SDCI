@@ -1,0 +1,6 @@
+# SDCI Settings
+import os
+
+SERVER_TOKEN = os.environ.get("SDCI_SERVER_TOKEN", None)
+TASK_RUN_TIMEOUT_SECONDS = os.environ.get("TASK_RUN_TIMEOUT", 120)
+CLIENT_REQUEST_TIMEOUT_SECONDS = os.environ.get("CLIENT_REQUEST_TIMEOUT", 600)

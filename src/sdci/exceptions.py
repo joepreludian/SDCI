@@ -4,3 +4,7 @@ class SDCIException(Exception):
 
 class SDCIServerException(SDCIException):
     pass
+
+
+class SDCIFatalException(SDCIException):
+    pass

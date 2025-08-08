@@ -1,0 +1,26 @@
+services:
+  sdci-base:
+    image: sdci:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    profiles:
+      - build
+
+  sdci-server:
+    image: sdci:latest
+    ports:
+      - "8842:8842"
+    environment:
+      - SDCI_SERVER_TOKEN=HELLO_WORLD_123
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./src/tasks:/app/src/tasks
+
+  sdci-client:
+    image: sdci:latest
+    command: sdci-cli run http://sdci-server:8842 demo first_param "second param" third_param
+    environment:
+      - SDCI_TOKEN=HELLO_WORLD_123
+    profiles:
+      - client-run

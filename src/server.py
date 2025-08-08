@@ -2,19 +2,19 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 from importlib.metadata import version
-from typing import Literal, Optional
 
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import HTTPBearer
-from pydantic import BaseModel
 
 __version__ = version("sdci")
 
 from starlette.responses import StreamingResponse
 
 from sdci.exceptions import SDCIServerException
-from sdci.runner import CommandRunner
+from sdci.schemas import TaskOutputSchema, TaskRequestSchema
+from sdci.server_runner import CommandRunner
+from sdci.settings import SERVER_TOKEN
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +25,13 @@ task_info_store = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info(f"SDCI - Initializing System - Server Version v{__version__}")
+    logger.info("*******************************")
+    logger.info(f"SDCI - SERVER - v{__version__}")
+    logger.info("*******************************")
+    logger.info("Ready to rock! /o/\n")
+
     yield
+
     logger.info("SDCI - Shutting down system")
 
 
@@ -41,23 +46,13 @@ oauth2_scheme = HTTPBearer()
 
 
 async def verify_token(token: str = Depends(oauth2_scheme)):
-    if token.credentials != "HAPPY123":
+    if token.credentials != SERVER_TOKEN:
         raise HTTPException(
             status_code=401,
             detail="Invalid authentication credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
     return token
-
-
-class TaskRequestSchema(BaseModel):
-    args: list = []
-
-
-class TaskOutputSchema(BaseModel):
-    pid: Optional[int] = None
-    exit_code: Optional[int] = None
-    status: Literal["STOPPED", "RUNNING", "FINISHED", "TIMEOUT"] = "STOPPED"
 
 
 @app.post("/tasks/{task_name:str}/", dependencies=[Depends(verify_token)])
@@ -99,6 +94,10 @@ async def get_task_status(task_name: str) -> TaskOutputSchema:
 
 
 if __name__ == "__main__":
-    uvicorn.run(
-        "server:app", host="0.0.0.0", port=8842, reload=True, log_config="log_conf.yaml"
-    )
+    if not SERVER_TOKEN:
+        print(
+            f"SDCI - v{__version__} - SERVER TOKEN NOT FOUND - Please provide a token via SDCI_SERVER_TOKEN env var"
+        )
+        exit(1)
+
+    uvicorn.run("server:app", host="0.0.0.0", port=8842, log_config="log_conf.yaml")
