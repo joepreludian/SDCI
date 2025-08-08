@@ -50,19 +50,20 @@ jobs:
           pip install uv
           uv --version
 
-      - name: Deploy to PyPI
-        run: |
-          uv build
-          uv publish --token ${{ secrets.PYPI_API_TOKEN }}
-
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.VERSION }}
           name: Release v${{ env.VERSION }}
           draft: false
           prerelease: false
-          token: ${{ secrets.JOEPRELUDIAN_GITHUB_TOKEN }}
+#          token: ${{ secrets.JOEPRELUDIAN_GITHUB_TOKEN }}
+
+      - name: Deploy to PyPI
+        run: |
+          uv build
+          uv publish --token ${{ secrets.PYPI_API_TOKEN }}
+
 
   docker-deploy:
     needs: build
@@ -95,4 +96,4 @@ jobs:
 
       - name: Clean up
         run: |
-          docker-compose down
+          docker compose down
