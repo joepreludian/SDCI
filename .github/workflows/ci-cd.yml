@@ -19,6 +19,11 @@ jobs:
         with:
           python-version: '3.13'
 
+      - name: Install Pre-commit
+        run: |
+          pip install pre-commit
+          pre-commit run --all-files
+
       - name: Install uv
         run: |
           pip install uv
@@ -32,7 +37,7 @@ jobs:
         run: |
           echo "NOT AVAILABLE YET"
 
-  release:
+  pypi-deploy:
     needs: build
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
@@ -45,11 +50,6 @@ jobs:
           toml get --toml-path pyproject.toml project.version > VERSION
           echo "VERSION=$(cat VERSION)" >> $GITHUB_ENV
 
-      - name: Create Git tag
-        run: |
-          git tag v${{ env.VERSION }}
-          git push origin v${{ env.VERSION }}
-
       - name: Install uv
         run: |
           pip install uv
@@ -59,7 +59,6 @@ jobs:
         run: |
           uv build
           uv publish --token ${{ secrets.PYPI_API_TOKEN }}
-
 
   docker-deploy:
     needs: build
@@ -93,3 +92,31 @@ jobs:
       - name: Clean up
         run: |
           docker compose down
+
+  release:
+    needs: [pypi-deploy, docker-deploy]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version
+        run: |
+          pip install toml-cli
+          toml get --toml-path pyproject.toml project.version > VERSION
+          echo "VERSION=$(cat VERSION)" >> $GITHUB_ENV
+
+      - name: Create Git tag
+        run: |
+          git tag v${{ env.VERSION }}
+          git push origin v${{ env.VERSION }}
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.VERSION }}
+          name: Release v${{ env.VERSION }}
+          draft: false
+          prerelease: false
+          token: ${{ secrets.GITHUB_TOKEN }}
