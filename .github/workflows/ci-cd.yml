@@ -45,19 +45,15 @@ jobs:
           toml get --toml-path pyproject.toml project.version > VERSION
           echo "VERSION=$(cat VERSION)" >> $GITHUB_ENV
 
+      - name: Create Git tag
+        run: |
+          git tag v${{ env.VERSION }}
+          git push origin v${{ env.VERSION }}
+
       - name: Install uv
         run: |
           pip install uv
           uv --version
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ env.VERSION }}
-          name: Release v${{ env.VERSION }}
-          draft: false
-          prerelease: false
-#          token: ${{ secrets.JOEPRELUDIAN_GITHUB_TOKEN }}
 
       - name: Deploy to PyPI
         run: |
