@@ -1,0 +1,103 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install uv
+        run: |
+          pip install uv
+          uv --version
+
+      - name: Install dependencies with uv
+        run: |
+          uv pip install -e .
+
+      - name: Run tests
+        run: |
+          echo "NOT AVAILABLE YET"
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        run: |
+          pip install toml-cli
+          toml get --toml-path pyproject.toml project.version > VERSION
+          echo "VERSION=$(cat VERSION)" >> $GITHUB_ENV
+
+      - name: Deploy to PyPI
+        run: |
+          uv build
+          uv publish --token ${{ secrets.PYPI_API_TOKEN }}
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ env.VERSION }}
+          name: Release v${{ env.VERSION }}
+          draft: false
+          prerelease: false
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  docker-deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+#      - name: Set up Docker Buildx
+#        uses: docker/setup-buildx-action@v3
+#
+#      - name: Cache Docker layers
+#        uses: actions/cache@v4
+#        with:
+#          path: /tmp/.buildx-cache
+#          key: ${{ runner.os }}-buildx-${{ github.sha }}
+#          restore-keys: |
+#            ${{ runner.os }}-buildx-
+
+      - name: Build with Docker Compose
+        run: |
+          docker-compose build sdci-base
+
+      - name: Smoke Tests
+        run: |
+          docker-compose up -d sdci-server
+          docker-compose run sdci-client
+          curl -s -o /dev/null -w "%{http_code}" http://localhost:8842/docs || true
+          docker compose down
+
+      - name: Push to Docker Hub
+        if: github.ref == 'refs/heads/main'
+        run: |
+          pip install toml-cli
+          toml get --toml-path pyproject.toml project.version > PROJECT_VERSION
+
+          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+          docker tag sdci-base:latest ${{ secrets.DOCKER_USERNAME }}/sdci:$(cat PROJECT_VERSION)
+          docker push ${{ secrets.DOCKER_USERNAME }}/sdci:$(cat PROJECT_VERSION)
+
+      - name: Clean up
+        run: |
+          docker-compose down
