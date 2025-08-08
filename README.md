@@ -73,47 +73,6 @@ A Docker image will be provided that allows you to run the SDCI server with mini
 - `src/sdci/command.py`: CLI interface using Click
 - `src/tasks/`: Directory containing task definitions as basic shell scripts.
 
-### Project Structure Diagram
-
-```mermaid
-graph TD
-    A[SDCI Project] --> B[src]
-    A --> C[pyproject.toml]
-    A --> D[README.md]
-
-    B --> E[server.py]
-    B --> F[sdci]
-    B --> G[tasks]
-    B --> H[log_conf.yaml]
-
-    F --> I[client.py]
-    F --> J[command.py]
-    F --> K[runner.py]
-    F --> L[exceptions.py]
-    F --> M[__init__.py]
-
-    G --> N[test_job_1.sh]
-
-    %% Component relationships
-    E -.uses.-> K
-    I -.uses.-> E
-    J -.uses.-> I
-    K -.executes.-> N
-
-    %% Class descriptions
-    classDef server fill:#f9d,stroke:#333,stroke-width:2px
-    classDef client fill:#bbf,stroke:#333,stroke-width:2px
-    classDef runner fill:#bfb,stroke:#333,stroke-width:2px
-    classDef tasks fill:#fbb,stroke:#333,stroke-width:2px
-    classDef config fill:#ddd,stroke:#333,stroke-width:1px
-
-    class E server
-    class I,J client
-    class K runner
-    class N tasks
-    class C,D,H,L,M config
-```
-
 The diagram above shows the structure of the SDCI project:
 
 1. **Server Component** (`server.py`): The FastAPI server that handles task execution requests
