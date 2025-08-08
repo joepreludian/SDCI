@@ -84,7 +84,7 @@ jobs:
 
       - name: Build with Docker Compose
         run: |
-          docker-compose build sdci-base
+          docker compose build sdci-base
 
       - name: Smoke Tests
         run: |
