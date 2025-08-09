@@ -1,6 +1,6 @@
 [project]
 name = "sdci"
-version = "0.3.0"
+version = "0.3.1"
 description = "SDCI - Sistema de Deploy Continuo Integrado - Integrated Continuous Deployment System - Sidecar Micro CD"
 readme = "README.md"
 authors = [

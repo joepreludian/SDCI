@@ -16,6 +16,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./src/tasks:/app/src/tasks
+      - ./:/app/
 
   sdci-client:
     image: sdci:latest
@@ -24,3 +25,5 @@ services:
       - SDCI_TOKEN=HELLO_WORLD_123
     profiles:
       - client-run
+    volumes:
+      - ./:/app/

@@ -48,7 +48,7 @@ class CommandRunner:
         yield "********** task logs - start ********** \n\n"
 
         process = await asyncio.create_subprocess_exec(
-            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT
         )
 
         # Update Process
