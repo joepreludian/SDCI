@@ -58,27 +58,6 @@ sdci-cli run --token HAPPY123 http://localhost:8842 job_1 param1 param2 param3
 - `TASK_NAME`: Name of the task to run (required)
 - `PARAMETERS`: Optional parameters to pass to the task
 
-## 🖥️ Server
-
-The SDCI server component is currently in development. The goal is to create a Docker image that will be used as a sidecard in production environments, making it easily deployable alongside your main applications.
-
-### Docker Deployment
-
-A Docker image will be provided that allows you to run the SDCI server with minimal configuration. This image is designed to work as a sidecard container in your production environment.
-
-## 📁 Project Structure
-
-- `src/server.py`: FastAPI server implementation
-- `src/sdci/client.py`: Client implementation for communicating with the server
-- `src/sdci/command.py`: CLI interface using Click
-- `src/tasks/`: Directory containing task definitions as basic shell scripts.
-
-The diagram above shows the structure of the SDCI project:
-
-1. **Server Component** (`server.py`): The FastAPI server that handles task execution requests
-2. **Client Components** (`client.py`, `command.py`): Handle communication with the server and provide CLI interface
-3. **Runner Component** (`runner.py`): Manages the execution of shell script tasks
-4. **Tasks** (`test_job_1.sh`): Shell scripts that define the actual tasks to be executed
 
 ## 👤 Author
 
