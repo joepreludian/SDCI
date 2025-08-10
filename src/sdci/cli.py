@@ -2,6 +2,7 @@ import os
 from importlib.metadata import version
 
 import click
+import keyring
 
 __version__ = version("sdci")
 
@@ -28,10 +29,13 @@ def run(token, server, task, args):
     if not token:
         token = os.environ.get("SDCI_TOKEN", None)
 
+    if not token:
+        token = keyring.get_password("SDCI_token", server)
+
     try:
         if not token:
             raise SDCIException(
-                "TOKEN NOT FOUND - Please provide a token or set SDCI_TOKEN env var"
+                "TOKEN NOT FOUND - Please provide a token or set SDCI_TOKEN env var, or use 'sdci-cli store-token'"
             )
 
         client = SDCIClient(server, token)
@@ -42,3 +46,20 @@ def run(token, server, task, args):
     except SDCIException as exc:
         print(f"[Client Failed to execute task] - {exc}")
         exit(1)
+
+
+@entrypoint.command()
+@click.argument("server", required=True)
+@click.argument("token", required=True)
+def store_token(server, token):
+    """Store the token in the local system"""
+    keyring.set_password("SDCI_token", server, token)
+    print(f"[ TOKEN STORED ] - Stored for {server}...\n")
+
+
+@entrypoint.command()
+@click.argument("server", required=True)
+def delete_token(server):
+    """Delete the token from the local system"""
+    keyring.delete_password("SDCI_token", server)
+    print(f"[ TOKEN DELETED ] - Deleted for {server}...\n")
