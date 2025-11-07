@@ -1,6 +1,6 @@
 [project]
 name = "sdci"
-version = "0.4.0"
+version = "0.5.1"
 description = "SDCI - Sistema de Deploy Continuo Integrado - Integrated Continuous Deployment System - Sidecar Micro CD"
 readme = "README.md"
 authors = [
@@ -18,7 +18,7 @@ classifiers = [
     "Topic :: Software Development :: Build Tools",
     "Topic :: System :: Software Distribution",
 ]
-requires-python = ">=3.13"
+requires-python = ">=3.10,<3.11"
 dependencies = [
     "click>=8.2.1",
     "fastapi[standard]>=0.116.1",

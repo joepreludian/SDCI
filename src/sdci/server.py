@@ -93,11 +93,11 @@ async def get_task_status(task_name: str) -> TaskOutputSchema:
     return TaskOutputSchema.model_validate(task_details)
 
 
-if __name__ == "__main__":
+def run_server():
     if not SERVER_TOKEN:
         print(
             f"SDCI - v{__version__} - SERVER TOKEN NOT FOUND - Please provide a token via SDCI_SERVER_TOKEN env var"
         )
         exit(1)
 
-    uvicorn.run("server:app", host="0.0.0.0", port=8842, log_config="log_conf.yaml")
+    uvicorn.run("sdci.server:app", host="0.0.0.0", port=8842, log_config="log_conf.yaml")

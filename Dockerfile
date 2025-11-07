@@ -25,4 +25,4 @@ WORKDIR /app/
 RUN pip install .
 WORKDIR /app/src/
 
-CMD ["python", "server.py"]
+CMD ["python", "-m", "sdci"]
