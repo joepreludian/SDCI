@@ -5,7 +5,7 @@ def make_install(exe):
     manifest = FileManifest()
     manifest.add_python_resource('.', exe)
 
-    log_conf = glob(["log_conf.yaml"])
+    log_conf = glob(["src/sdci/log_conf.yaml"], strip_prefix="src/sdci/")
     manifest.add_manifest(log_conf)
     return manifest
 

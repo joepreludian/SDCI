@@ -1,4 +1,4 @@
-FROM python:3.13
+FROM python:3.12
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -25,4 +25,4 @@ WORKDIR /app/
 RUN pip install .
 WORKDIR /app/src/
 
-CMD ["python", "-m", "sdci"]
+CMD ["sdci-server", "--host", "0.0.0.0"]

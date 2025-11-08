@@ -5,22 +5,39 @@ import time
 from importlib.metadata import version
 
 from sdci.exceptions import SDCIServerException
-from sdci.settings import TASK_RUN_TIMEOUT_SECONDS
+from sdci.settings import Settings
 
 __version__ = version("sdci")
 logger = logging.getLogger(__name__)
 
 
+class AvailableCommandsDescriber:
+    @staticmethod
+    def get_available_commands():
+        if not os.path.exists(Settings.TASKS_DIR):
+            raise SDCIServerException(f"TASKS_DIR NOT FOUND: {Settings.TASKS_DIR}")
+
+        available_tasks = [
+            f[:-3] for f in os.listdir(Settings.TASKS_DIR) if f.endswith(".sh")
+        ]
+        logger.info(f"available_tasks={available_tasks}")
+
+        return available_tasks
+
+
 class CommandRunner:
     def __init__(self, shell_file: str) -> None:
         self._task_name = shell_file
-        self._shell_file = f"./tasks/{self._task_name}.sh"
+        self._shell_file = f"{Settings.TASKS_DIR}/{self._task_name}.sh"
         self._lock = None
         self._store = None
 
         if not os.path.exists(self._shell_file):
+            logger.error(f"SHELL FILE NOT FOUND ON SERVER: {self._shell_file}")
+            available_tasks = AvailableCommandsDescriber.get_available_commands()
+
             raise SDCIServerException(
-                f"SHELL FILE NOT FOUND ON SERVER: {self._shell_file}"
+                f'TASK "{shell_file}" not found. Available tasks: {available_tasks}'
             )
 
     def for_lock(self, lock: asyncio.Lock):
@@ -44,7 +61,7 @@ class CommandRunner:
         logger.info("Triggering Task - Lock acquired")
 
         yield f"********** SDCI SERVER v{__version__} **********\n"
-        yield f'RUNNING TASK: "{cmd}": TIMEOUT: {TASK_RUN_TIMEOUT_SECONDS}s\n'
+        yield f'RUNNING TASK: "{cmd}": TIMEOUT: {Settings.TASK_RUN_TIMEOUT_SECONDS}s\n'
         yield "********** task logs - start ********** \n\n"
 
         process = await asyncio.create_subprocess_exec(
@@ -60,7 +77,7 @@ class CommandRunner:
         }
 
         start_time = time.time()
-        timeout = start_time + TASK_RUN_TIMEOUT_SECONDS
+        timeout = start_time + Settings.TASK_RUN_TIMEOUT_SECONDS
         while True:
             output = await process.stdout.readline()
 
