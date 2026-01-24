@@ -12,6 +12,11 @@ SDCI (Sistema de Deploy Continuo Integrado - Integrated Continuous Deployment Sy
 - Real-time task output streaming
 - Task status monitoring
 
+## 🔩 Architecture Diagram
+The ideal way to work with this tool is using the following structure:
+<img width="431" height="471" alt="workflow_structure drawio" src="https://github.com/user-attachments/assets/8ba902b6-2c52-4159-90b1-b6179a0d1054" />
+
+For safety purposes, the ideal way to handle such workflow is to protect SDCI connection under a Tailscale or any other VPN connection; Also you can add sdci on the internet, but a reverse proxy is strongly recommended (e.g. Traefik or Nginx)
 
 ## 📥 Installation
 
@@ -20,9 +25,10 @@ SDCI (Sistema de Deploy Continuo Integrado - Integrated Continuous Deployment Sy
 - Python 3.13 or higher
 
 ### Installing the client
+The recommended approach is by using `pipx`;
 
 ```bash
-pip install sdci
+pipx install sdci
 ```
 
 ## 📖 Usage
