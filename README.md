@@ -11,6 +11,7 @@ SDCI (Sistema de Deploy Continuo Integrado - Integrated Continuous Deployment Sy
 - Token-based authentication
 - Real-time task output streaming
 - Task status monitoring
+- CLI interface to manage tasks
 
 ## 🔩 Architecture Diagram
 The ideal way to work with this tool is using the following structure:
@@ -42,6 +43,9 @@ python -m src.server
 ```
 
 By default, the server runs on `0.0.0.0:8842`.
+
+## Creating tasks
+The server will look up for tasks in the `tasks/` directory where you ran this server. It will look for shell scripts on this folder. The job name is the script name without the `.sh` extension.
 
 ### Using the client
 

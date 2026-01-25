@@ -81,7 +81,7 @@ jobs:
         run: |
           docker compose up -d sdci-server
           sleep 5
-          docker compose run sdci-client
+          docker compose run --rm sdci-client
           curl -s -o /dev/null -w "%{http_code}" http://localhost:8842/docs || true
           docker compose down
 

@@ -58,6 +58,11 @@ async def verify_token(token: str = Depends(oauth2_scheme)):
     return token
 
 
+@app.get("/health")
+async def health():
+    return {"status": "OK"}
+
+
 @app.post("/tasks/{task_name:str}/", dependencies=[Depends(verify_token)])
 async def run_task(task_name: str, request: TaskRequestSchema):
     global task_info_store

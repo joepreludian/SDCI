@@ -13,6 +13,12 @@ services:
       - "8842:8842"
     environment:
       - SDCI_SERVER_TOKEN=HELLO_WORLD_123
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8842/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 4
+      start_period: 1s
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./src/tasks:/app/src/tasks
@@ -25,5 +31,8 @@ services:
       - SDCI_TOKEN=HELLO_WORLD_123
     profiles:
       - client-run
+    depends_on:
+      sdci-server:
+        condition: service_healthy
     volumes:
       - ./:/app/
