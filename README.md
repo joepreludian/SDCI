@@ -11,6 +11,7 @@ SDCI (Sistema de Deploy Continuo Integrado - Integrated Continuous Deployment Sy
 - Token-based authentication
 - Real-time task output streaming
 - Task status monitoring
+- Authenticated single-file upload with progress bar
 - CLI interface to manage tasks
 
 ## 🔩 Architecture Diagram
@@ -67,6 +68,37 @@ sdci-cli run --token HAPPY123 http://localhost:8842 job_1 param1 param2 param3
 - `SERVER_URL`: URL of the SDCI server (required)
 - `TASK_NAME`: Name of the task to run (required)
 - `PARAMETERS`: Optional parameters to pass to the task
+
+### Uploading an asset
+
+You can upload a single file (e.g. a build artifact or archive) to the server. The
+file is stored under the server's upload directory, inside the relative `REMOTE_PATH`
+directory (created recursively), keeping its original filename:
+
+```bash
+sdci-cli upload-asset --token YOUR_TOKEN SERVER_URL LOCAL_FILE REMOTE_PATH
+```
+
+Example (lands at `<upload-dir>/releases/v1/app.zip` on the server):
+
+```bash
+sdci-cli upload-asset --token HAPPY123 http://localhost:8842 ./app.zip releases/v1
+```
+
+Upload notes:
+
+- The server runs **either one task OR one upload at a time** (shared global lock);
+  it returns `429` while busy.
+- Path traversal is rejected (`400`) and an existing destination file is **never
+  overwritten** (`409`).
+- A progress bar is shown during upload.
+
+The server's upload directory is configured with the `--upload-dir` flag (or the
+`UPLOAD_DIR` env var, default `./uploads`):
+
+```bash
+sdci-server --upload-dir ./uploads --server-token YOUR_TOKEN --tasks-dir ./tasks
+```
 
 
 ## 👤 Author

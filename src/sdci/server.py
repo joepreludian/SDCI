@@ -2,12 +2,13 @@ import asyncio
 import getpass
 import logging
 import logging.config
+import os
 from contextlib import asynccontextmanager
 from importlib.metadata import version
 
 import click
 import uvicorn
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile, status
 from fastapi.security import HTTPBearer
 
 __version__ = version("sdci")
@@ -15,8 +16,8 @@ __version__ = version("sdci")
 from starlette.responses import StreamingResponse
 
 from sdci.exceptions import SDCIServerException
-from sdci.schemas import TaskOutputSchema, TaskRequestSchema
-from sdci.server_runner import AvailableCommandsDescriber, CommandRunner
+from sdci.schemas import TaskOutputSchema, TaskRequestSchema, UploadOutputSchema
+from sdci.server_runner import AvailableCommandsDescriber, CommandRunner, FileUploader
 from sdci.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -101,6 +102,48 @@ async def get_task_status(task_name: str) -> TaskOutputSchema:
     return TaskOutputSchema.model_validate(task_details)
 
 
+@app.post("/upload_file/", dependencies=[Depends(verify_token)])
+async def upload_file(
+    file: UploadFile = File(...),
+    path: str = Form(...),
+) -> UploadOutputSchema:
+    logger.info(f"SDCI - UPLOAD FILE - {path}/{file.filename}")
+
+    if lock.locked():
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Server is busy running a task or upload",
+        )
+
+    await lock.acquire()
+    logger.info("Triggering Upload - Lock acquired")
+
+    try:
+        uploader = FileUploader(path, file.filename).for_lock(lock)
+
+        try:
+            destination = uploader.resolved_path
+        except SDCIServerException as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+            )
+
+        if os.path.exists(destination):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"DESTINATION FILE ALREADY EXISTS: {path}/{file.filename}",
+            )
+
+        size = await uploader.save(file)
+    finally:
+        lock.release()
+        logger.info("UPLOAD ENDED - Lock released")
+
+    return UploadOutputSchema(
+        path=f"{path}/{file.filename}", size=size, status="UPLOADED"
+    )
+
+
 @click.command()
 @click.option("--host", default="127.0.0.1", help="Host address to bind")
 @click.option("--port", default=8842, type=int, help="Port to listen")
@@ -109,7 +152,14 @@ async def get_task_status(task_name: str) -> TaskOutputSchema:
     help="Server token to secure SDCI. if not provided, SDCI_SERVER_TOKEN env var will be used",
 )
 @click.option("--tasks-dir", help="Directory with sh scripts to be executed as tasks")
-def run_server(host: str, port: int, server_token: str, tasks_dir: str = "./tasks"):
+@click.option("--upload-dir", help="Directory where uploaded files are stored")
+def run_server(
+    host: str,
+    port: int,
+    server_token: str,
+    tasks_dir: str = "./tasks",
+    upload_dir: str = "./uploads",
+):
     logging.config.dictConfig(
         {
             "version": 1,
@@ -161,6 +211,11 @@ def run_server(host: str, port: int, server_token: str, tasks_dir: str = "./task
 
     if tasks_dir:
         Settings.TASKS_DIR = tasks_dir
+
+    if upload_dir:
+        Settings.UPLOAD_DIR = upload_dir
+
+    os.makedirs(Settings.UPLOAD_DIR, exist_ok=True)
 
     try:
         if not Settings.SERVER_TOKEN:
