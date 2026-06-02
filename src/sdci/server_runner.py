@@ -25,6 +25,58 @@ class AvailableCommandsDescriber:
         return available_tasks
 
 
+class FileUploader:
+    CHUNK_SIZE = 1024 * 1024  # 1 MiB
+
+    def __init__(self, remote_dir: str, filename: str) -> None:
+        self._remote_dir = remote_dir
+        self._filename = filename
+        self._lock = None
+
+    def for_lock(self, lock: asyncio.Lock):
+        self._lock = lock
+        return self
+
+    @property
+    def resolved_path(self) -> str:
+        if os.sep in self._filename or (os.altsep and os.altsep in self._filename):
+            raise SDCIServerException(
+                f"INVALID FILENAME (contains path separator): {self._filename}"
+            )
+
+        upload_dir = os.path.realpath(Settings.UPLOAD_DIR)
+        candidate = os.path.realpath(
+            os.path.join(upload_dir, self._remote_dir, self._filename)
+        )
+
+        if os.path.commonpath([upload_dir, candidate]) != upload_dir:
+            raise SDCIServerException(
+                f"INVALID DESTINATION PATH (escapes upload dir): {self._remote_dir}"
+            )
+
+        return candidate
+
+    async def save(self, upload_file) -> int:
+        destination = self.resolved_path
+
+        os.makedirs(os.path.dirname(destination), exist_ok=True)
+
+        if os.path.exists(destination):
+            raise SDCIServerException(f"DESTINATION FILE ALREADY EXISTS: {destination}")
+
+        bytes_written = 0
+        with open(destination, "wb") as out_file:
+            while True:
+                chunk = await upload_file.read(self.CHUNK_SIZE)
+                if not chunk:
+                    break
+                out_file.write(chunk)
+                bytes_written += len(chunk)
+
+        logger.info(f"UPLOADED FILE: {destination} ({bytes_written} bytes)")
+        return bytes_written
+
+
 class CommandRunner:
     def __init__(self, shell_file: str) -> None:
         self._task_name = shell_file

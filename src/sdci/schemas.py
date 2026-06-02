@@ -11,3 +11,9 @@ class TaskOutputSchema(BaseModel):
     pid: Optional[int] = None
     exit_code: Optional[int] = None
     status: Literal["STOPPED", "RUNNING", "FINISHED", "TIMEOUT"] = "STOPPED"
+
+
+class UploadOutputSchema(BaseModel):
+    path: str
+    size: int
+    status: Literal["UPLOADED"] = "UPLOADED"
