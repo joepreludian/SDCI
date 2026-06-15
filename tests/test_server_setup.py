@@ -19,23 +19,6 @@ FAKE_PORT = 8842
 FAKE_USER = "deployuser"
 
 
-def make_installer(tmp_path, **overrides):
-    """Build a SystemdInstaller with defaults that point into tmp_path."""
-    home = tmp_path / "home" / FAKE_USER
-    home.mkdir(parents=True, exist_ok=True)
-
-    defaults = dict(
-        ip=FAKE_IP,
-        token=FAKE_TOKEN,
-        port=FAKE_PORT,
-        user=FAKE_USER,
-    )
-    defaults.update(overrides)
-
-    # Redirect expanduser so paths land inside tmp_path
-    return defaults, str(home)
-
-
 # ---------------------------------------------------------------------------
 # Path / property tests
 # ---------------------------------------------------------------------------
@@ -726,3 +709,31 @@ class TestInstall:
         all_commands = [c["args"] for c in calls]
         assert any("enable" in c and "myapp" in c for c in all_commands)
         assert any("restart" in c and "myapp" in c for c in all_commands)
+
+    def test_install_raises_when_binary_missing(self, tmp_path, monkeypatch):
+        """install() must raise SDCIServerException when sdci-server is not on PATH."""
+        home = tmp_path / "home" / FAKE_USER
+        home.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setattr(
+            "os.path.expanduser",
+            lambda p: str(home) if p == f"~{FAKE_USER}" else p,
+        )
+        monkeypatch.setattr(sys, "platform", "linux")
+        # systemctl present, sdci-server absent
+        monkeypatch.setattr(
+            "shutil.which",
+            lambda name: "/bin/systemctl" if name == "systemctl" else None,
+        )
+
+        installer = SystemdInstaller(ip=FAKE_IP, token=FAKE_TOKEN, user=FAKE_USER)
+
+        calls = []
+        installer._run_privileged = lambda args, input=None: calls.append(
+            {"args": args, "input": input}
+        )
+
+        with pytest.raises(SDCIServerException, match="sdci-server"):
+            installer.install()
+
+        # No privileged command should have been executed
+        assert calls == []

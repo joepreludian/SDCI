@@ -2,6 +2,7 @@
 
 import getpass
 import os
+import shlex
 import shutil
 import string
 import subprocess
@@ -64,6 +65,7 @@ class SystemdInstaller:
         self.force = force
 
         home = os.path.expanduser(f"~{self.user}")
+        self._working_dir = os.path.join(home, ".sdci")
 
         if tasks_dir is None:
             self.tasks_dir = os.path.join(home, ".sdci", "tasks")
@@ -90,8 +92,7 @@ class SystemdInstaller:
 
     @property
     def working_dir(self) -> str:
-        home = os.path.expanduser(f"~{self.user}")
-        return os.path.join(home, ".sdci")
+        return self._working_dir
 
     # ------------------------------------------------------------------
     # Pure rendering (no I/O)
@@ -161,7 +162,7 @@ class SystemdInstaller:
         )
         if result.returncode != 0:
             raise SDCIServerException(
-                f"Command 'sudo {' '.join(args)}' failed: {result.stderr}"
+                f"Command 'sudo {shlex.join(args)}' failed: {result.stderr}"
             )
 
     # ------------------------------------------------------------------
