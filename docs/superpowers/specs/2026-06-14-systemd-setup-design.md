@@ -272,5 +272,5 @@ the token, and `/etc/sdci/sdci.env` is `0600` root-owned.
     `feature/file-upload`.
 - New manual page `docs/manual/systemd-setup.md` (concise; a small Mermaid
   diagram of the install sequence).
-- Bump `pyproject.toml` `version` `0.6.2 → 0.7.0` (breaking CLI change).
+- Bump `pyproject.toml` `version` `0.6.2 → 1.0.0` (breaking CLI change → major bump).
 - Conventional commits; **no** "Co-Authored-By"; run `pre-commit` before pushing.
