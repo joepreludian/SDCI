@@ -28,7 +28,7 @@ Type=simple
 User=$user
 WorkingDirectory=$working_dir
 EnvironmentFile=/etc/sdci/sdci.env
-ExecStart=$binary serve --host $ip --port $port --tasks-dir $tasks_dir
+ExecStart="$binary" serve --host $ip --port $port --tasks-dir "$tasks_dir"
 Restart=on-failure
 RestartSec=5
 
@@ -65,6 +65,10 @@ class SystemdInstaller:
         self.force = force
 
         home = os.path.expanduser(f"~{self.user}")
+        if home.startswith("~"):
+            raise SDCIServerException(
+                f"Cannot resolve home directory for user '{self.user}'"
+            )
         self._working_dir = os.path.join(home, ".sdci")
 
         if tasks_dir is None:

@@ -100,12 +100,12 @@ class TestRenderUnit:
     def test_exec_start_contains_binary(self, tmp_path, monkeypatch):
         installer = self._make_installer(tmp_path, monkeypatch)
         unit = installer.render_unit()
-        assert FAKE_BINARY in unit
+        assert f'"{FAKE_BINARY}"' in unit
 
     def test_exec_start_contains_serve_subcommand(self, tmp_path, monkeypatch):
         installer = self._make_installer(tmp_path, monkeypatch)
         unit = installer.render_unit()
-        assert f"{FAKE_BINARY} serve" in unit
+        assert f'"{FAKE_BINARY}" serve' in unit
 
     def test_exec_start_contains_host(self, tmp_path, monkeypatch):
         installer = self._make_installer(tmp_path, monkeypatch)
@@ -123,7 +123,7 @@ class TestRenderUnit:
         installer = self._make_installer(tmp_path, monkeypatch)
         unit = installer.render_unit()
         assert "--tasks-dir" in unit
-        assert str(home / ".sdci" / "tasks") in unit
+        assert f'--tasks-dir "{home / ".sdci" / "tasks"}"' in unit
 
     def test_no_upload_dir_in_unit(self, tmp_path, monkeypatch):
         installer = self._make_installer(tmp_path, monkeypatch)
@@ -178,7 +178,7 @@ class TestRenderUnit:
             ip=FAKE_IP, token=FAKE_TOKEN, user=FAKE_USER, tasks_dir=str(tasks)
         )
         unit = installer.render_unit()
-        assert str(tasks) in unit
+        assert f'--tasks-dir "{tasks}"' in unit
 
 
 # ---------------------------------------------------------------------------
@@ -737,3 +737,46 @@ class TestInstall:
 
         # No privileged command should have been executed
         assert calls == []
+
+
+# ---------------------------------------------------------------------------
+# Fix 1 — quoted ExecStart paths tests
+# ---------------------------------------------------------------------------
+
+
+class TestExecStartQuoting:
+    def test_tasks_dir_with_space_is_quoted_in_exec_start(self, tmp_path, monkeypatch):
+        """tasks_dir containing a space must be double-quoted in ExecStart."""
+        home = tmp_path / "home" / FAKE_USER
+        home.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setattr(
+            "os.path.expanduser",
+            lambda p: str(home) if p == f"~{FAKE_USER}" else p,
+        )
+        monkeypatch.setattr(
+            "shutil.which", lambda name: FAKE_BINARY if name == "sdci-server" else None
+        )
+        # Create a tasks dir whose name contains a space
+        spaced_tasks = tmp_path / "my tasks dir"
+        spaced_tasks.mkdir()
+        installer = SystemdInstaller(
+            ip=FAKE_IP,
+            token=FAKE_TOKEN,
+            user=FAKE_USER,
+            tasks_dir=str(spaced_tasks),
+        )
+        unit = installer.render_unit()
+        assert f'--tasks-dir "{spaced_tasks}"' in unit
+
+
+# ---------------------------------------------------------------------------
+# Fix 2 — unresolvable --user home guard tests
+# ---------------------------------------------------------------------------
+
+
+class TestUnresolvableUserHome:
+    def test_raises_when_home_cannot_be_resolved(self, monkeypatch):
+        """SDCIServerException raised when expanduser returns the input unchanged."""
+        monkeypatch.setattr("os.path.expanduser", lambda p: p)
+        with pytest.raises(SDCIServerException, match="Cannot resolve home directory"):
+            SystemdInstaller(ip=FAKE_IP, token=FAKE_TOKEN, user="nobodyxyz")
