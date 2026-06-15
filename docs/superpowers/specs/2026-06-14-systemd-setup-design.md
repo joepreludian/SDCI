@@ -1,7 +1,12 @@
 # SDCI systemd Setup — Design Spec
 
 **Date:** 2026-06-14
-**Status:** Approved (design), pending implementation plan
+**Status:** Approved (design), in implementation
+**Base branch:** `feature/systemd-setup`, branched off `main`. The file-upload
+feature is **not** present on this base, so this feature intentionally has **no
+`--upload-dir`** handling and does **not** touch `CLAUDE.md` (which lives on the
+unmerged `feature/file-upload` branch). The unit's `ExecStart` configures
+`--tasks-dir` only.
 
 ## Context
 
@@ -51,9 +56,9 @@ enables + restarts the service. It runs as the invoking user and escalates to
 | Token storage | Written to `/etc/sdci/sdci.env` (`root:root`, mode `0600`), referenced by the unit via `EnvironmentFile=`. Never placed in `ExecStart`. |
 | Service user | The **invoking user** (`getpass.getuser()`), overridable with `--user`. |
 | Privilege | `setup` runs as the user and shells out to `sudo` for each privileged step (first call prompts for the password). |
-| Code structure | A `SystemdInstaller` **service class** (Approach A), styled after `FileUploader`/`CommandRunner`. Pure stdlib; no new dependencies. |
-| Default dirs | `~/.sdci/tasks` and `~/.sdci/uploads` are **created** if missing. |
-| Operator-specified dirs | If `--tasks-dir`/`--upload-dir` is passed explicitly, the dir **must already exist** — setup validates and errors out, it does **not** create it. |
+| Code structure | A `SystemdInstaller` **service class** (Approach A), styled after `CommandRunner`. Pure stdlib; no new dependencies. |
+| Default dirs | `~/.sdci/tasks` is **created** if missing. |
+| Operator-specified dirs | If `--tasks-dir` is passed explicitly, the dir **must already exist** — setup validates and errors out, it does **not** create it. |
 | Existing unit | Abort with a confirm prompt unless `--force` is given. |
 
 ## Command Interface
@@ -65,14 +70,14 @@ enables + restarts the service. It runs as the invoking user and escalates to
 Identical flags and behavior to today's `run_server`:
 
 ```bash
-sdci-server serve [--host ...] [--port ...] [--server-token ...] [--tasks-dir ...] [--upload-dir ...]
+sdci-server serve [--host ...] [--port ...] [--server-token ...] [--tasks-dir ...]
 ```
 
 ### `sdci-server setup` (new)
 
 ```bash
 sdci-server setup --ip <IP> --token <TOKEN> \
-  [--port 8842] [--tasks-dir DIR] [--upload-dir DIR] \
+  [--port 8842] [--tasks-dir DIR] \
   [--user LOGIN] [--service-name sdci] [--force]
 ```
 
@@ -82,7 +87,6 @@ sdci-server setup --ip <IP> --token <TOKEN> \
 | `--token` | yes | — | written to the env file as `SDCI_SERVER_TOKEN` |
 | `--port` | no | `8842` | `serve --port` |
 | `--tasks-dir` | no | `~/.sdci/tasks` | absolute tasks dir (see dir rules below) |
-| `--upload-dir` | no | `~/.sdci/uploads` | absolute upload dir (see dir rules below) |
 | `--user` | no | invoking user | systemd `User=` |
 | `--service-name` | no | `sdci` | unit filename (`<name>.service`) |
 | `--force` | no | off | overwrite an existing unit without prompting |
@@ -90,12 +94,12 @@ sdci-server setup --ip <IP> --token <TOKEN> \
 **Directory rules:**
 
 - The unit's `WorkingDirectory` (`~/.sdci`) is **tool-managed** and always created
-  if missing — independent of the tasks/upload dir rules below — so the service
-  never fails on a missing `WorkingDirectory`.
-- When a dir is left at its **default** (`~/.sdci/...`), setup creates it
+  if missing — independent of the tasks-dir rule below — so the service never
+  fails on a missing `WorkingDirectory`.
+- When `--tasks-dir` is left at its **default** (`~/.sdci/tasks`), setup creates it
   (`os.makedirs(..., exist_ok=True)`), owned by the invoking user.
-- When a dir is **explicitly provided**, setup requires it to already exist;
-  otherwise it raises `SDCIServerException` and aborts **without** creating it.
+- When `--tasks-dir` is **explicitly provided**, setup requires it to already
+  exist; otherwise it raises `SDCIServerException` and aborts **without** creating it.
 
 `~` is expanded against the **target user's** home (`--user`, default the invoking
 user). Paths written into the unit are always absolute.
@@ -115,7 +119,7 @@ Type=simple
 User=<user>
 WorkingDirectory=<home-of-user>/.sdci
 EnvironmentFile=/etc/sdci/sdci.env
-ExecStart=<abs path to sdci-server> serve --host <ip> --port <port> --tasks-dir <tasks_dir> --upload-dir <upload_dir>
+ExecStart=<abs path to sdci-server> serve --host <ip> --port <port> --tasks-dir <tasks_dir>
 Restart=on-failure
 RestartSec=5
 
@@ -149,7 +153,7 @@ module-level `string.Template` constants.
 
 ```python
 class SystemdInstaller:
-    def __init__(self, *, ip, token, port=8842, tasks_dir=None, upload_dir=None,
+    def __init__(self, *, ip, token, port=8842, tasks_dir=None,
                  user=None, service_name="sdci", force=False): ...
 
     # paths
@@ -172,9 +176,9 @@ class SystemdInstaller:
     def install(self) -> None: ...         # full sequence (section below)
 ```
 
-`--tasks-dir`/`--upload-dir` are tracked as "explicit vs default" (e.g. the
-constructor receives `None` for an unset dir and substitutes the default,
-remembering which were defaulted) so `prepare_dirs()` can apply the create-vs-validate rule.
+`--tasks-dir` is tracked as "explicit vs default" (e.g. the constructor receives
+`None` when unset and substitutes the default, remembering it was defaulted) so
+`prepare_dirs()` can apply the create-vs-validate rule.
 
 ### `src/sdci/server.py` (refactor)
 
@@ -201,8 +205,8 @@ cached for the rest):
    failure on the macOS dev box).
 2. **Resolve binary** — `shutil.which("sdci-server")`; error if missing.
 3. **Prepare dirs** — always create the tool-managed `WorkingDirectory`
-   (`~/.sdci`); create default tasks/upload dirs; validate that explicit dirs
-   exist (raise if not). No creation of operator-specified dirs.
+   (`~/.sdci`); create the default tasks dir; if `--tasks-dir` was explicit,
+   validate it exists (raise if not). No creation of operator-specified dirs.
 4. **Existing-unit check** — if `unit_path` exists and `--force` is not set,
    prompt for confirmation; abort on "no".
 5. **Privileged steps** (each via `sudo`):
@@ -222,7 +226,7 @@ cached for the rest):
 
 - non-systemd platform (not Linux, or `systemctl` absent),
 - `sdci-server` binary not resolvable,
-- an explicit `--tasks-dir`/`--upload-dir` that does not exist,
+- an explicit `--tasks-dir` that does not exist,
 - a failing `sudo`/`systemctl` step (surface the command's stderr),
 - user-declined overwrite of an existing unit.
 
@@ -234,8 +238,7 @@ All dependencies (`subprocess`, `shutil.which`, `sys.platform`, filesystem) are
 mocked/monkeypatched, so the suite runs without a real systemd:
 
 - `render_unit()` produces the correct `ExecStart` (absolute binary path, host,
-  port, tasks/upload dirs) and includes `User=`, `EnvironmentFile=`,
-  `Restart=on-failure`.
+  port, tasks dir) and includes `User=`, `EnvironmentFile=`, `Restart=on-failure`.
 - `render_unit()` **does not** contain the token.
 - `render_env()` contains `SDCI_SERVER_TOKEN=<token>`.
 - `unit_path` and `env_path` resolve to the expected locations (with a custom
@@ -243,12 +246,14 @@ mocked/monkeypatched, so the suite runs without a real systemd:
 - `check_platform()` raises when `shutil.which("systemctl")` is `None` or the
   platform is not Linux.
 - `resolve_binary()` raises when `shutil.which("sdci-server")` is `None`.
-- `prepare_dirs()` always creates the `WorkingDirectory` (`~/.sdci`), creates
-  default tasks/upload dirs when missing, and raises for an explicit dir that does
+- `prepare_dirs()` always creates the `WorkingDirectory` (`~/.sdci`), creates the
+  default tasks dir when missing, and raises for an explicit `--tasks-dir` that does
   not exist (and does **not** create it).
-- `install()` issues the expected privileged sequence (mock `subprocess.run` /
-  `_run_privileged`): asserts `daemon-reload`, `enable`, `restart` are invoked and
-  the token is passed via **stdin**, not argv.
+- `install()` issues the expected privileged sequence **in order** (mock
+  `subprocess.run` / `_run_privileged`): asserts the full ordered sequence —
+  `install -d /etc/sdci` → `tee env` → `chmod 600 env` → `tee unit` → `chmod 644
+  unit` → `daemon-reload` → `enable` → `restart` — and that the token is passed via
+  **stdin**, not argv, in any call.
 - existing unit without `--force` aborts (mock `os.path.exists` + confirmation).
 
 Manual end-to-end (on a Linux host with systemd):
@@ -259,11 +264,13 @@ the token, and `/etc/sdci/sdci.env` is `0600` root-owned.
 ## Breaking Change, Documentation & Release
 
 - **Breaking:** `sdci-server --host ...` → `sdci-server serve --host ...`. Update:
-  - `Dockerfile:28` → `CMD ["sdci-server", "serve", "--host", "0.0.0.0"]`
+  - `Dockerfile` `CMD ["sdci-server", "--host", "0.0.0.0"]` → `CMD ["sdci-server", "serve", "--host", "0.0.0.0"]`
     (verify `docker-compose.yaml`, whose server inherits the Dockerfile `CMD`).
   - `README.md` run example(s).
-  - `CLAUDE.md` architecture / run-command notes (document `serve` + `setup`).
+  - `CLAUDE.md` is **not** present on this base (`main`), so it is **not** touched
+    here; the `serve`/`setup` note belongs to whoever later reconciles this with
+    `feature/file-upload`.
 - New manual page `docs/manual/systemd-setup.md` (concise; a small Mermaid
   diagram of the install sequence).
-- Bump `pyproject.toml` `version` `0.7.0 → 0.8.0` (breaking CLI change).
+- Bump `pyproject.toml` `version` `0.6.2 → 0.7.0` (breaking CLI change).
 - Conventional commits; **no** "Co-Authored-By"; run `pre-commit` before pushing.
