@@ -86,15 +86,6 @@ class TestPaths:
         installer = SystemdInstaller(ip=FAKE_IP, token=FAKE_TOKEN, user=FAKE_USER)
         assert installer.tasks_dir == str(home / ".sdci" / "tasks")
 
-    def test_default_upload_dir(self, tmp_path, monkeypatch):
-        home = tmp_path / "home" / FAKE_USER
-        monkeypatch.setattr(
-            "os.path.expanduser",
-            lambda p: str(home) if p == f"~{FAKE_USER}" else p,
-        )
-        installer = SystemdInstaller(ip=FAKE_IP, token=FAKE_TOKEN, user=FAKE_USER)
-        assert installer.upload_dir == str(home / ".sdci" / "uploads")
-
     def test_user_defaults_to_current_user(self, monkeypatch):
         monkeypatch.setattr("getpass.getuser", lambda: "currentuser")
         monkeypatch.setattr(
@@ -151,13 +142,10 @@ class TestRenderUnit:
         assert "--tasks-dir" in unit
         assert str(home / ".sdci" / "tasks") in unit
 
-    def test_exec_start_contains_upload_dir(self, tmp_path, monkeypatch):
-        home = tmp_path / "home" / FAKE_USER
-        home.mkdir(parents=True, exist_ok=True)
+    def test_no_upload_dir_in_unit(self, tmp_path, monkeypatch):
         installer = self._make_installer(tmp_path, monkeypatch)
         unit = installer.render_unit()
-        assert "--upload-dir" in unit
-        assert str(home / ".sdci" / "uploads") in unit
+        assert "--upload-dir" not in unit
 
     def test_user_field_present(self, tmp_path, monkeypatch):
         installer = self._make_installer(tmp_path, monkeypatch)
@@ -349,17 +337,6 @@ class TestPrepareDirs:
         installer.prepare_dirs()
         assert os.path.isdir(installer.tasks_dir)
 
-    def test_creates_default_upload_dir(self, tmp_path, monkeypatch):
-        home = tmp_path / "home" / FAKE_USER
-        home.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setattr(
-            "os.path.expanduser",
-            lambda p: str(home) if p == f"~{FAKE_USER}" else p,
-        )
-        installer = SystemdInstaller(ip=FAKE_IP, token=FAKE_TOKEN, user=FAKE_USER)
-        installer.prepare_dirs()
-        assert os.path.isdir(installer.upload_dir)
-
     def test_raises_for_explicit_missing_tasks_dir(self, tmp_path, monkeypatch):
         home = tmp_path / "home" / FAKE_USER
         home.mkdir(parents=True, exist_ok=True)
@@ -384,37 +361,6 @@ class TestPrepareDirs:
         missing = str(tmp_path / "nonexistent_tasks")
         installer = SystemdInstaller(
             ip=FAKE_IP, token=FAKE_TOKEN, user=FAKE_USER, tasks_dir=missing
-        )
-        try:
-            installer.prepare_dirs()
-        except SDCIServerException:
-            pass
-        assert not os.path.exists(missing)
-
-    def test_raises_for_explicit_missing_upload_dir(self, tmp_path, monkeypatch):
-        home = tmp_path / "home" / FAKE_USER
-        home.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setattr(
-            "os.path.expanduser",
-            lambda p: str(home) if p == f"~{FAKE_USER}" else p,
-        )
-        missing = str(tmp_path / "nonexistent_uploads")
-        installer = SystemdInstaller(
-            ip=FAKE_IP, token=FAKE_TOKEN, user=FAKE_USER, upload_dir=missing
-        )
-        with pytest.raises(SDCIServerException, match="upload_dir"):
-            installer.prepare_dirs()
-
-    def test_does_not_create_explicit_missing_upload_dir(self, tmp_path, monkeypatch):
-        home = tmp_path / "home" / FAKE_USER
-        home.mkdir(parents=True, exist_ok=True)
-        monkeypatch.setattr(
-            "os.path.expanduser",
-            lambda p: str(home) if p == f"~{FAKE_USER}" else p,
-        )
-        missing = str(tmp_path / "nonexistent_uploads")
-        installer = SystemdInstaller(
-            ip=FAKE_IP, token=FAKE_TOKEN, user=FAKE_USER, upload_dir=missing
         )
         try:
             installer.prepare_dirs()
@@ -574,6 +520,80 @@ class TestInstall:
         assert any("daemon-reload" in c for c in all_commands), "Missing: daemon-reload"
         assert any("enable" in c for c in all_commands), "Missing: systemctl enable"
         assert any("restart" in c for c in all_commands), "Missing: systemctl restart"
+
+    def test_full_privileged_command_order(self, tmp_path, monkeypatch):
+        """Assert the exact relative order of all 8 privileged commands in install()."""
+        installer, calls = self._setup(tmp_path, monkeypatch)
+        installer.install()
+
+        env_path = installer.env_path
+        unit_path = installer.unit_path
+        service_name = installer.service_name
+
+        def find_idx(predicate, label):
+            for i, c in enumerate(calls):
+                if predicate(c):
+                    return i
+            raise AssertionError(f"Privileged call not found: {label}")
+
+        idx_install_d = find_idx(
+            lambda c: c["args"][:4] == ["install", "-d", "-m", "0755"]
+            and "/etc/sdci" in c["args"],
+            "install -d -m 0755 /etc/sdci",
+        )
+        idx_tee_env = find_idx(
+            lambda c: c["args"][0] == "tee" and env_path in c["args"],
+            f"tee {env_path}",
+        )
+        idx_chmod_env = find_idx(
+            lambda c: c["args"][:2] == ["chmod", "600"] and env_path in c["args"],
+            f"chmod 600 {env_path}",
+        )
+        idx_tee_unit = find_idx(
+            lambda c: c["args"][0] == "tee" and unit_path in c["args"],
+            f"tee {unit_path}",
+        )
+        idx_chmod_unit = find_idx(
+            lambda c: c["args"][:2] == ["chmod", "644"] and unit_path in c["args"],
+            f"chmod 644 {unit_path}",
+        )
+        idx_daemon_reload = find_idx(
+            lambda c: "daemon-reload" in c["args"],
+            "systemctl daemon-reload",
+        )
+        idx_enable = find_idx(
+            lambda c: "enable" in c["args"] and service_name in c["args"],
+            f"systemctl enable {service_name}",
+        )
+        idx_restart = find_idx(
+            lambda c: "restart" in c["args"] and service_name in c["args"],
+            f"systemctl restart {service_name}",
+        )
+
+        # Assert full ordering
+        assert idx_install_d < idx_tee_env, "install -d must precede tee env"
+        assert idx_tee_env < idx_chmod_env, "tee env must precede chmod 600 env"
+        assert idx_chmod_env < idx_tee_unit, (
+            "env file must be chmod'd before unit file is written (security)"
+        )
+        assert idx_tee_unit < idx_chmod_unit, "tee unit must precede chmod 644 unit"
+        assert idx_chmod_unit < idx_daemon_reload, (
+            "chmod unit must precede daemon-reload"
+        )
+        assert idx_daemon_reload < idx_enable, "daemon-reload must precede enable"
+        assert idx_enable < idx_restart, "enable must precede restart"
+
+        # Security: token must appear only via stdin input, never in any argv
+        for c in calls:
+            args_str = " ".join(c["args"])
+            assert FAKE_TOKEN not in args_str, f"Token found in argv: {c['args']}"
+        env_tee_calls = [
+            c for c in calls if c["args"][0] == "tee" and env_path in c["args"]
+        ]
+        assert len(env_tee_calls) == 1
+        assert FAKE_TOKEN in (env_tee_calls[0]["input"] or ""), (
+            "Token not passed via stdin to env tee call"
+        )
 
     def test_token_passed_via_stdin_not_argv(self, tmp_path, monkeypatch):
         installer, calls = self._setup(tmp_path, monkeypatch)

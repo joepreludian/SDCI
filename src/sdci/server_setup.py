@@ -27,7 +27,7 @@ Type=simple
 User=$user
 WorkingDirectory=$working_dir
 EnvironmentFile=/etc/sdci/sdci.env
-ExecStart=$binary serve --host $ip --port $port --tasks-dir $tasks_dir --upload-dir $upload_dir
+ExecStart=$binary serve --host $ip --port $port --tasks-dir $tasks_dir
 Restart=on-failure
 RestartSec=5
 
@@ -52,7 +52,6 @@ class SystemdInstaller:
         token: str,
         port: int = 8842,
         tasks_dir: str | None = None,
-        upload_dir: str | None = None,
         user: str | None = None,
         service_name: str = "sdci",
         force: bool = False,
@@ -72,13 +71,6 @@ class SystemdInstaller:
         else:
             self.tasks_dir = os.path.abspath(tasks_dir)
             self._tasks_dir_explicit = True
-
-        if upload_dir is None:
-            self.upload_dir = os.path.join(home, ".sdci", "uploads")
-            self._upload_dir_explicit = False
-        else:
-            self.upload_dir = os.path.abspath(upload_dir)
-            self._upload_dir_explicit = True
 
         # Injected confirmation callable — defaults to click.confirm.
         # Tests override this to avoid interactive stdin.
@@ -114,7 +106,6 @@ class SystemdInstaller:
             ip=self.ip,
             port=self.port,
             tasks_dir=self.tasks_dir,
-            upload_dir=self.upload_dir,
         )
 
     def render_env(self) -> str:
@@ -156,16 +147,6 @@ class SystemdInstaller:
                 )
         else:
             os.makedirs(self.tasks_dir, exist_ok=True)
-
-        # upload_dir
-        if self._upload_dir_explicit:
-            if not os.path.isdir(self.upload_dir):
-                raise SDCIServerException(
-                    f"upload_dir '{self.upload_dir}' does not exist; "
-                    "create it first or omit --upload-dir to use the default"
-                )
-        else:
-            os.makedirs(self.upload_dir, exist_ok=True)
 
     # ------------------------------------------------------------------
     # Privileged helpers
