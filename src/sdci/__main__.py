@@ -1,3 +1,3 @@
-from sdci.server import run_server
+from sdci.server import main
 
-run_server()
+main()
