@@ -18,6 +18,7 @@ from starlette.responses import StreamingResponse
 from sdci.exceptions import SDCIServerException
 from sdci.schemas import TaskOutputSchema, TaskRequestSchema, UploadOutputSchema
 from sdci.server_runner import AvailableCommandsDescriber, CommandRunner, FileUploader
+from sdci.server_setup import SystemdInstaller
 from sdci.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -144,7 +145,13 @@ async def upload_file(
     )
 
 
-@click.command()
+@click.group()
+def main():
+    """SDCI server commands."""
+    pass
+
+
+@main.command(name="serve")
 @click.option("--host", default="127.0.0.1", help="Host address to bind")
 @click.option("--port", default=8842, type=int, help="Port to listen")
 @click.option(
@@ -153,13 +160,14 @@ async def upload_file(
 )
 @click.option("--tasks-dir", help="Directory with sh scripts to be executed as tasks")
 @click.option("--upload-dir", help="Directory where uploaded files are stored")
-def run_server(
+def serve(
     host: str,
     port: int,
     server_token: str,
     tasks_dir: str = "./tasks",
     upload_dir: str = "./uploads",
 ):
+    """Run the SDCI server."""
     logging.config.dictConfig(
         {
             "version": 1,
@@ -229,3 +237,48 @@ def run_server(
         exit(1)
 
     uvicorn.run("sdci.server:app", host=host, port=port)
+
+
+@main.command()
+@click.option(
+    "--ip", required=True, help="IP/host the server binds to (maps to serve --host)"
+)
+@click.option(
+    "--token", required=True, help="Server token; written to the systemd env file"
+)
+@click.option("--port", default=8842, type=int, help="Port to listen on")
+@click.option(
+    "--tasks-dir",
+    default=None,
+    help="Tasks dir (default ~/.sdci/tasks; if provided, must already exist)",
+)
+@click.option(
+    "--user", default=None, help="User to run the service as (default: invoking user)"
+)
+@click.option("--service-name", default="sdci", help="systemd service name")
+@click.option(
+    "--force",
+    is_flag=True,
+    default=False,
+    help="Overwrite an existing unit without prompting",
+)
+def setup(ip, token, port, tasks_dir, user, service_name, force):
+    """Install and start SDCI as a systemd service."""
+    try:
+        installer = SystemdInstaller(
+            ip=ip,
+            token=token,
+            port=port,
+            tasks_dir=tasks_dir,
+            user=user,
+            service_name=service_name,
+            force=force,
+        )
+        installer.install()
+    except SDCIServerException as exc:
+        click.echo(f"[ SETUP FAILED ] - {exc}", err=True)
+        exit(1)
+    click.echo(
+        f"[ SETUP COMPLETE ] - service '{service_name}' installed and started. "
+        f"Check it with: systemctl status {service_name}"
+    )
