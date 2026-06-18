@@ -1,6 +1,6 @@
 [project]
 name = "sdci"
-version = "0.7.0"
+version = "1.0.0"
 description = "SDCI - Sistema de Deploy Continuo Integrado - Integrated Continuous Deployment System - Sidecar Micro CD"
 readme = "README.md"
 authors = [
@@ -28,7 +28,7 @@ dependencies = [
 
 [project.scripts]
 sdci-cli = "sdci.cli:entrypoint"
-sdci-server = "sdci.__main__:run_server"
+sdci-server = "sdci.server:main"
 
 [build-system]
 requires = ["uv_build>=0.8.4,<0.9.0"]

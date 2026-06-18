@@ -25,4 +25,4 @@ WORKDIR /app/
 RUN pip install .
 WORKDIR /app/src/
 
-CMD ["sdci-server", "--host", "0.0.0.0"]
+CMD ["sdci-server", "serve", "--host", "0.0.0.0"]

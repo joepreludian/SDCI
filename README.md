@@ -40,10 +40,32 @@ pipx install sdci
 Run the server component:
 
 ```bash
-python -m src.server
+sdci-server serve --host 0.0.0.0 --server-token YOUR_TOKEN --tasks-dir ./tasks
 ```
 
 By default, the server runs on `0.0.0.0:8842`.
+
+### Installing as a systemd service (Linux only)
+
+`sdci-server setup` installs and starts SDCI as a persistent systemd service.
+
+```bash
+sdci-server setup --ip 0.0.0.0 --token YOUR_TOKEN
+```
+
+The command requires Linux with systemd and will prompt for sudo when writing privileged files.
+
+| Flag | Required | Default | Description |
+|---|---|---|---|
+| `--ip` | yes | — | Host/IP the server binds to |
+| `--token` | yes | — | Server token (stored in `/etc/sdci/sdci.env`) |
+| `--port` | no | `8842` | Port to listen on |
+| `--tasks-dir` | no | `~/.sdci/tasks` | Directory containing task scripts |
+| `--user` | no | invoking user | OS user the service runs as |
+| `--service-name` | no | `sdci` | systemd unit name |
+| `--force` | no | false | Overwrite existing unit without prompting |
+
+The token is written to `/etc/sdci/sdci.env` with mode `0600` (root-readable only) and is never embedded in the unit file itself.
 
 ## Creating tasks
 The server will look up for tasks in the `tasks/` directory where you ran this server. It will look for shell scripts on this folder. The job name is the script name without the `.sh` extension.
