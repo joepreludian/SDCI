@@ -176,6 +176,47 @@ class TestSetupCustomOptions:
 
 
 # ---------------------------------------------------------------------------
+# setup subcommand — --run_as_user alias
+# ---------------------------------------------------------------------------
+
+
+class TestSetupRunAsUserAlias:
+    def test_setup_forwards_run_as_user_alias(self, monkeypatch):
+        """--run_as_user must forward to SystemdInstaller as the `user` kwarg."""
+        from sdci.server import main
+
+        fake_cls = _make_installer_cls()
+        monkeypatch.setattr("sdci.server.SystemdInstaller", fake_cls)
+
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            ["setup", "--ip", "1.2.3.4", "--token", "T", "--run_as_user", "deploy"],
+        )
+
+        assert result.exit_code == 0, result.output
+        fake_cls.assert_called_once_with(
+            ip="1.2.3.4",
+            token="T",
+            port=8842,
+            tasks_dir=None,
+            user="deploy",
+            service_name="sdci",
+            force=False,
+        )
+        fake_cls._instance.install.assert_called_once()
+
+    def test_setup_accepts_both_user_option_names(self):
+        """The setup command's `user` param must expose --user and --run_as_user."""
+        from sdci.server import main
+
+        setup = main.commands["setup"]
+        user_param = next(p for p in setup.params if p.name == "user")
+        assert "--user" in user_param.opts
+        assert "--run_as_user" in user_param.opts
+
+
+# ---------------------------------------------------------------------------
 # setup subcommand — failure handling
 # ---------------------------------------------------------------------------
 
