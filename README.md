@@ -2,7 +2,9 @@
 
 SDCI (Sistema de Deploy Continuo Integrado - Integrated Continuous Deployment System) is a lightweight continuous deployment system consisting of a server and client tool. It allows you to run predefined tasks remotely through a simple command-line interface.
 
-**⚠️ NOTE: This project is currently in ALPHA. A better documentation will be provided soon.**
+**🧪 NOTE: This project is currently in BETA.**
+
+> ⚠️ **Do not expose SDCI directly to the internet.** The server speaks plain **HTTP**. Run it over a private network — [Tailscale](https://tailscale.com/) or another VPN (recommended) — or behind a TLS-terminating reverse proxy (Traefik, Nginx, Apache). See **🔒 Security** below.
 
 ## ✨ Features
 
@@ -18,7 +20,18 @@ SDCI (Sistema de Deploy Continuo Integrado - Integrated Continuous Deployment Sy
 The ideal way to work with this tool is using the following structure:
 <img width="431" height="471" alt="workflow_structure drawio" src="https://github.com/user-attachments/assets/8ba902b6-2c52-4159-90b1-b6179a0d1054" />
 
-For safety purposes, the ideal way to handle such workflow is to protect SDCI connection under a Tailscale or any other VPN connection; Also you can add sdci on the internet, but a reverse proxy is strongly recommended (e.g. Traefik or Nginx)
+For safety purposes, never expose SDCI directly over its raw HTTP port — see **🔒 Security** below for the recommended ways to reach it.
+
+## 🔒 Security
+
+SDCI's server communicates over plain **HTTP** and authenticates with a bearer token. Because the traffic is unencrypted, the token (and your task output) would travel in clear text if the port were reachable from the public internet. **Never expose the SDCI port directly to the internet.**
+
+Use one of the following instead:
+
+- **VPN / private network (recommended)** — keep SDCI on a private network and reach it through [Tailscale](https://tailscale.com/), WireGuard, or another VPN. The HTTP port is then only reachable by trusted peers and never published publicly.
+- **HTTPS reverse proxy** — put SDCI behind a proxy that terminates TLS and forwards to it on `localhost` (e.g. [Traefik](https://traefik.io/), [Nginx](https://nginx.org/), or Apache). Clients then connect over `https://` and SDCI itself stays bound to a loopback/private interface.
+
+Either way, bind the server to a private interface (avoid `0.0.0.0` on a public host) and treat the server token as a secret.
 
 ## 📥 Installation
 
@@ -61,7 +74,7 @@ The command requires Linux with systemd and will prompt for sudo when writing pr
 | `--token` | yes | — | Server token (stored in `/etc/sdci/sdci.env`) |
 | `--port` | no | `8842` | Port to listen on |
 | `--tasks-dir` | no | `~/.sdci/tasks` | Directory containing task scripts |
-| `--user` | no | invoking user | OS user the service runs as |
+| `--user` / `--run_as_user` | no | invoking user | OS user the service runs as (both names accepted) |
 | `--service-name` | no | `sdci` | systemd unit name |
 | `--force` | no | false | Overwrite existing unit without prompting |
 
@@ -86,10 +99,41 @@ sdci-cli run --token HAPPY123 http://localhost:8842 job_1 param1 param2 param3
 
 ### Parameters
 
-- `--token`: Authentication token (required)
+- `--token`: Authentication token (optional if provided via `SDCI_TOKEN` or stored in the keyring — see below)
 - `SERVER_URL`: URL of the SDCI server (required)
 - `TASK_NAME`: Name of the task to run (required)
 - `PARAMETERS`: Optional parameters to pass to the task
+
+### Storing credentials
+
+Instead of passing `--token` on every call, the client can resolve the token automatically. It looks it up in this order:
+
+1. The `--token` flag, if provided
+2. The `SDCI_TOKEN` environment variable
+3. The system keyring (per server URL)
+
+To save a token in the OS keyring for a given server (so you can drop `--token` entirely):
+
+```bash
+sdci-cli store-token SERVER_URL TOKEN
+```
+
+Example:
+
+```bash
+sdci-cli store-token http://localhost:8842 HAPPY123
+
+# Now token-less commands work for that server:
+sdci-cli run http://localhost:8842 job_1 param1
+```
+
+To remove a stored token:
+
+```bash
+sdci-cli delete-token SERVER_URL
+```
+
+The same resolution order applies to `run` and `upload-asset`.
 
 ### Uploading an asset
 
