@@ -24,7 +24,7 @@ sdci-server setup --ip <HOST> --token <TOKEN> [OPTIONS]
 | `--token` | yes | — | Server authentication token |
 | `--port` | no | `8842` | Port to listen on |
 | `--tasks-dir` | no | `~/.sdci/tasks` | Directory containing task `.sh` scripts |
-| `--user` | no | invoking user | OS user the service runs as |
+| `--user` / `--run_as_user` | no | invoking user | OS user the service runs as (both names are accepted; when omitted, the invoking user is kept) |
 | `--service-name` | no | `sdci` | systemd unit name |
 | `--force` | no | false | Overwrite existing unit without prompting |
 

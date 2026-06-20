@@ -253,7 +253,11 @@ def serve(
     help="Tasks dir (default ~/.sdci/tasks; if provided, must already exist)",
 )
 @click.option(
-    "--user", default=None, help="User to run the service as (default: invoking user)"
+    "--user",
+    "--run_as_user",
+    "user",
+    default=None,
+    help="User to run the service as (default: invoking user). Alias: --run_as_user",
 )
 @click.option("--service-name", default="sdci", help="systemd service name")
 @click.option(
