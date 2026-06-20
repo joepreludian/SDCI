@@ -99,20 +99,14 @@ sdci-cli run --token HAPPY123 http://localhost:8842 job_1 param1 param2 param3
 
 ### Parameters
 
-- `--token`: Authentication token (optional if provided via `SDCI_TOKEN` or stored in the keyring — see below)
+- `--token`: Authentication token (optional if provided via `SDCI_TOKEN` or stored in the OS keychain — see below)
 - `SERVER_URL`: URL of the SDCI server (required)
 - `TASK_NAME`: Name of the task to run (required)
 - `PARAMETERS`: Optional parameters to pass to the task
 
 ### Storing credentials
 
-Instead of passing `--token` on every call, the client can resolve the token automatically. It looks it up in this order:
-
-1. The `--token` flag, if provided
-2. The `SDCI_TOKEN` environment variable
-3. The system keyring (per server URL)
-
-To save a token in the OS keyring for a given server (so you can drop `--token` entirely):
+Instead of passing `--token` on every call, you can persist it once with `store-token`. The token is saved in your **OS keychain** (the native secret store — macOS Keychain, Windows Credential Manager, or the Secret Service / libsecret on Linux), keyed by the server URL — not in a plaintext config file.
 
 ```bash
 sdci-cli store-token SERVER_URL TOKEN
@@ -122,18 +116,30 @@ Example:
 
 ```bash
 sdci-cli store-token http://localhost:8842 HAPPY123
+```
 
-# Now token-less commands work for that server:
+After storing it, you can trigger tasks on that server **without** `--token` — the client automatically recovers the token from the keychain for the matching server URL:
+
+```bash
+# No --token needed: it is read back from the keychain.
 sdci-cli run http://localhost:8842 job_1 param1
 ```
 
-To remove a stored token:
+To remove a stored token from the keychain:
 
 ```bash
 sdci-cli delete-token SERVER_URL
 ```
 
-The same resolution order applies to `run` and `upload-asset`.
+#### Token resolution order
+
+When a command needs a token, the client resolves it in this order, using the first one it finds:
+
+1. The `--token` flag, if provided
+2. The `SDCI_TOKEN` environment variable
+3. The OS keychain (per server URL, as stored by `store-token`)
+
+This applies to both `run` and `upload-asset`.
 
 ### Uploading an asset
 
