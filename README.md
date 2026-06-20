@@ -151,7 +151,7 @@ directory (created recursively), keeping its original filename:
 sdci-cli upload-asset --token YOUR_TOKEN SERVER_URL LOCAL_FILE REMOTE_PATH
 ```
 
-Example (lands at `<upload-dir>/releases/v1/app.zip` on the server):
+Example (lands at `<uploads-dir>/releases/v1/app.zip` on the server):
 
 ```bash
 sdci-cli upload-asset --token HAPPY123 http://localhost:8842 ./app.zip releases/v1
@@ -165,11 +165,12 @@ Upload notes:
   overwritten** (`409`).
 - A progress bar is shown during upload.
 
-The server's upload directory is configured with the `--upload-dir` flag (or the
-`UPLOAD_DIR` env var, default `./uploads`):
+The server's upload directory is configured with the `--uploads-dir` flag (or the
+`UPLOADS_DIR` env var — the legacy `UPLOAD_DIR` is still honored as a fallback —
+default `./uploads`):
 
 ```bash
-sdci-server --upload-dir ./uploads --server-token YOUR_TOKEN --tasks-dir ./tasks
+sdci-server serve --uploads-dir ./uploads --server-token YOUR_TOKEN --tasks-dir ./tasks
 ```
 
 

@@ -146,6 +146,7 @@ async def upload_file(
 
 
 @click.group()
+@click.version_option(version=__version__, prog_name="sdci-server")
 def main():
     """SDCI server commands."""
     pass
@@ -159,13 +160,13 @@ def main():
     help="Server token to secure SDCI. if not provided, SDCI_SERVER_TOKEN env var will be used",
 )
 @click.option("--tasks-dir", help="Directory with sh scripts to be executed as tasks")
-@click.option("--upload-dir", help="Directory where uploaded files are stored")
+@click.option("--uploads-dir", help="Directory where uploaded files are stored")
 def serve(
     host: str,
     port: int,
     server_token: str,
     tasks_dir: str = "./tasks",
-    upload_dir: str = "./uploads",
+    uploads_dir: str = "./uploads",
 ):
     """Run the SDCI server."""
     logging.config.dictConfig(
@@ -220,10 +221,10 @@ def serve(
     if tasks_dir:
         Settings.TASKS_DIR = tasks_dir
 
-    if upload_dir:
-        Settings.UPLOAD_DIR = upload_dir
+    if uploads_dir:
+        Settings.UPLOADS_DIR = uploads_dir
 
-    os.makedirs(Settings.UPLOAD_DIR, exist_ok=True)
+    os.makedirs(Settings.UPLOADS_DIR, exist_ok=True)
 
     try:
         if not Settings.SERVER_TOKEN:
@@ -253,6 +254,11 @@ def serve(
     help="Tasks dir (default ~/.sdci/tasks; if provided, must already exist)",
 )
 @click.option(
+    "--uploads-dir",
+    default=None,
+    help="Uploads dir (default ~/.sdci/uploads; if provided, must already exist)",
+)
+@click.option(
     "--user",
     "--run_as_user",
     "user",
@@ -266,7 +272,7 @@ def serve(
     default=False,
     help="Overwrite an existing unit without prompting",
 )
-def setup(ip, token, port, tasks_dir, user, service_name, force):
+def setup(ip, token, port, tasks_dir, uploads_dir, user, service_name, force):
     """Install and start SDCI as a systemd service."""
     try:
         installer = SystemdInstaller(
@@ -274,6 +280,7 @@ def setup(ip, token, port, tasks_dir, user, service_name, force):
             token=token,
             port=port,
             tasks_dir=tasks_dir,
+            uploads_dir=uploads_dir,
             user=user,
             service_name=service_name,
             force=force,

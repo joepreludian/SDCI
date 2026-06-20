@@ -9,7 +9,7 @@ from sdci.settings import Settings
 
 @pytest.fixture
 def upload_dir(tmp_path, monkeypatch):
-    monkeypatch.setattr(Settings, "UPLOAD_DIR", str(tmp_path))
+    monkeypatch.setattr(Settings, "UPLOADS_DIR", str(tmp_path))
     return tmp_path
 
 

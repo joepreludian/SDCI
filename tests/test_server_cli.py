@@ -40,7 +40,7 @@ class TestGroupStructure:
         assert "setup" in main.commands, "'setup' subcommand must be registered"
 
     def test_serve_has_expected_params(self):
-        """serve subcommand must expose --host, --port, --server-token, --tasks-dir."""
+        """serve subcommand must expose --host, --port, --server-token, --tasks-dir, --uploads-dir."""
         from sdci.server import main
 
         serve = main.commands["serve"]
@@ -49,6 +49,16 @@ class TestGroupStructure:
         assert "port" in param_names
         assert "server_token" in param_names
         assert "tasks_dir" in param_names
+        assert "uploads_dir" in param_names
+
+    def test_serve_uploads_dir_flag_renamed(self):
+        """serve must expose --uploads-dir and no longer accept the old --upload-dir."""
+        from sdci.server import main
+
+        serve = main.commands["serve"]
+        all_opts = {opt for p in serve.params for opt in p.opts}
+        assert "--uploads-dir" in all_opts
+        assert "--upload-dir" not in all_opts
 
     def test_serve_help_exits_zero(self):
         """sdci-server serve --help should exit 0."""
@@ -89,6 +99,7 @@ class TestSetupDefaults:
             token="T",
             port=8842,
             tasks_dir=None,
+            uploads_dir=None,
             user=None,
             service_name="sdci",
             force=False,
@@ -130,6 +141,8 @@ class TestSetupCustomOptions:
                 "9000",
                 "--tasks-dir",
                 "/opt/tasks",
+                "--uploads-dir",
+                "/opt/uploads",
                 "--user",
                 "deploy",
                 "--service-name",
@@ -144,6 +157,7 @@ class TestSetupCustomOptions:
             token="secret",
             port=9000,
             tasks_dir="/opt/tasks",
+            uploads_dir="/opt/uploads",
             user="deploy",
             service_name="my-sdci",
             force=True,
@@ -200,6 +214,7 @@ class TestSetupRunAsUserAlias:
             token="T",
             port=8842,
             tasks_dir=None,
+            uploads_dir=None,
             user="deploy",
             service_name="sdci",
             force=False,
@@ -263,3 +278,68 @@ class TestSetupFailure:
         runner = CliRunner()
         result = runner.invoke(main, ["setup", "--ip", "1.2.3.4"])
         assert result.exit_code != 0
+
+
+# ---------------------------------------------------------------------------
+# setup subcommand — --uploads-dir
+# ---------------------------------------------------------------------------
+
+
+class TestSetupUploadsDir:
+    def test_setup_forwards_uploads_dir(self, monkeypatch):
+        """--uploads-dir must forward to SystemdInstaller as the `uploads_dir` kwarg."""
+        from sdci.server import main
+
+        fake_cls = _make_installer_cls()
+        monkeypatch.setattr("sdci.server.SystemdInstaller", fake_cls)
+
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            [
+                "setup",
+                "--ip",
+                "1.2.3.4",
+                "--token",
+                "T",
+                "--uploads-dir",
+                "/opt/uploads",
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        fake_cls.assert_called_once_with(
+            ip="1.2.3.4",
+            token="T",
+            port=8842,
+            tasks_dir=None,
+            uploads_dir="/opt/uploads",
+            user=None,
+            service_name="sdci",
+            force=False,
+        )
+        fake_cls._instance.install.assert_called_once()
+
+    def test_setup_has_uploads_dir_option(self):
+        """The setup command must expose a --uploads-dir option."""
+        from sdci.server import main
+
+        setup = main.commands["setup"]
+        all_opts = {opt for p in setup.params for opt in p.opts}
+        assert "--uploads-dir" in all_opts
+
+
+# ---------------------------------------------------------------------------
+# --version flag
+# ---------------------------------------------------------------------------
+
+
+class TestVersionFlag:
+    def test_version_flag_prints_version_and_exits_zero(self):
+        """sdci-server --version must print the package version and exit 0."""
+        from sdci.server import __version__, main
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["--version"])
+        assert result.exit_code == 0
+        assert __version__ in result.output

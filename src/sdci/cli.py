@@ -11,6 +11,7 @@ from sdci.exceptions import SDCIException
 
 
 @click.group()
+@click.version_option(version=__version__, prog_name="sdci-cli")
 def entrypoint():
     print(f"[ SDCI-CLI v{__version__} ]")
     """CLI application"""

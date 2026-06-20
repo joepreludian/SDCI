@@ -6,7 +6,7 @@ It performs the following steps (all privileged steps use `sudo`):
 
 1. Checks the platform (Linux + `systemctl` available).
 2. Resolves the `sdci-server` binary path from `PATH`.
-3. Creates the working directory (`~<user>/.sdci`) and the tasks directory.
+3. Creates the working directory (`~<user>/.sdci`), the tasks directory, and the uploads directory.
 4. If the unit file already exists and `--force` is not set, prompts for confirmation.
 5. Writes `/etc/sdci/sdci.env` (mode `0600`, root-readable only) containing the token.
 6. Writes `/etc/systemd/system/<name>.service` (mode `0644`).
@@ -23,7 +23,8 @@ sdci-server setup --ip <HOST> --token <TOKEN> [OPTIONS]
 | `--ip` | yes | — | Host/IP the server binds to |
 | `--token` | yes | — | Server authentication token |
 | `--port` | no | `8842` | Port to listen on |
-| `--tasks-dir` | no | `~/.sdci/tasks` | Directory containing task `.sh` scripts |
+| `--tasks-dir` | no | `~/.sdci/tasks` | Directory containing task `.sh` scripts (if provided, must already exist) |
+| `--uploads-dir` | no | `~/.sdci/uploads` | Directory where uploaded files are stored (if provided, must already exist) |
 | `--user` / `--run_as_user` | no | invoking user | OS user the service runs as (both names are accepted; when omitted, the invoking user is kept) |
 | `--service-name` | no | `sdci` | systemd unit name |
 | `--force` | no | false | Overwrite existing unit without prompting |
@@ -41,7 +42,7 @@ Type=simple
 User=<user>
 WorkingDirectory=/home/<user>/.sdci
 EnvironmentFile=/etc/sdci/sdci.env
-ExecStart=/usr/local/bin/sdci-server serve --host <ip> --port <port> --tasks-dir <tasks_dir>
+ExecStart=/usr/local/bin/sdci-server serve --host <ip> --port <port> --tasks-dir <tasks_dir> --uploads-dir <uploads_dir>
 Restart=on-failure
 RestartSec=5
 
@@ -59,7 +60,7 @@ flowchart TD
     B -- no --> FAIL1[Fail: unsupported platform]
     B -- yes --> C[Resolve sdci-server binary]
     C -- not found --> FAIL2[Fail: binary not on PATH]
-    C -- found --> D[Prepare working & tasks dirs]
+    C -- found --> D[Prepare working, tasks & uploads dirs]
     D --> E{Unit file exists\nand not --force?}
     E -- yes --> F[Prompt: overwrite?]
     F -- denied --> FAIL3[Fail: aborted]

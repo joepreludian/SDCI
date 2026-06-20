@@ -69,6 +69,15 @@ class TestPaths:
         installer = SystemdInstaller(ip=FAKE_IP, token=FAKE_TOKEN, user=FAKE_USER)
         assert installer.tasks_dir == str(home / ".sdci" / "tasks")
 
+    def test_default_uploads_dir(self, tmp_path, monkeypatch):
+        home = tmp_path / "home" / FAKE_USER
+        monkeypatch.setattr(
+            "os.path.expanduser",
+            lambda p: str(home) if p == f"~{FAKE_USER}" else p,
+        )
+        installer = SystemdInstaller(ip=FAKE_IP, token=FAKE_TOKEN, user=FAKE_USER)
+        assert installer.uploads_dir == str(home / ".sdci" / "uploads")
+
     def test_user_defaults_to_current_user(self, monkeypatch):
         monkeypatch.setattr("getpass.getuser", lambda: "currentuser")
         monkeypatch.setattr(
@@ -125,10 +134,22 @@ class TestRenderUnit:
         assert "--tasks-dir" in unit
         assert f'--tasks-dir "{home / ".sdci" / "tasks"}"' in unit
 
-    def test_no_upload_dir_in_unit(self, tmp_path, monkeypatch):
+    def test_default_uploads_dir_in_unit(self, tmp_path, monkeypatch):
+        home = tmp_path / "home" / FAKE_USER
+        home.mkdir(parents=True, exist_ok=True)
         installer = self._make_installer(tmp_path, monkeypatch)
         unit = installer.render_unit()
-        assert "--upload-dir" not in unit
+        assert "--uploads-dir" in unit
+        assert f'--uploads-dir "{home / ".sdci" / "uploads"}"' in unit
+
+    def test_explicit_uploads_dir_in_unit(self, tmp_path, monkeypatch):
+        uploads = tmp_path / "custom_uploads"
+        uploads.mkdir()
+        installer = self._make_installer(
+            tmp_path, monkeypatch, uploads_dir=str(uploads)
+        )
+        unit = installer.render_unit()
+        assert f'--uploads-dir "{uploads}"' in unit
 
     def test_user_field_present(self, tmp_path, monkeypatch):
         installer = self._make_installer(tmp_path, monkeypatch)
@@ -362,6 +383,63 @@ class TestPrepareDirs:
         existing.mkdir()
         installer = SystemdInstaller(
             ip=FAKE_IP, token=FAKE_TOKEN, user=FAKE_USER, tasks_dir=str(existing)
+        )
+        # Should not raise
+        installer.prepare_dirs()
+
+    def test_creates_default_uploads_dir(self, tmp_path, monkeypatch):
+        home = tmp_path / "home" / FAKE_USER
+        home.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setattr(
+            "os.path.expanduser",
+            lambda p: str(home) if p == f"~{FAKE_USER}" else p,
+        )
+        installer = SystemdInstaller(ip=FAKE_IP, token=FAKE_TOKEN, user=FAKE_USER)
+        installer.prepare_dirs()
+        assert os.path.isdir(installer.uploads_dir)
+
+    def test_raises_for_explicit_missing_uploads_dir(self, tmp_path, monkeypatch):
+        home = tmp_path / "home" / FAKE_USER
+        home.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setattr(
+            "os.path.expanduser",
+            lambda p: str(home) if p == f"~{FAKE_USER}" else p,
+        )
+        missing = str(tmp_path / "nonexistent_uploads")
+        installer = SystemdInstaller(
+            ip=FAKE_IP, token=FAKE_TOKEN, user=FAKE_USER, uploads_dir=missing
+        )
+        with pytest.raises(SDCIServerException, match="uploads_dir"):
+            installer.prepare_dirs()
+
+    def test_does_not_create_explicit_missing_uploads_dir(self, tmp_path, monkeypatch):
+        home = tmp_path / "home" / FAKE_USER
+        home.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setattr(
+            "os.path.expanduser",
+            lambda p: str(home) if p == f"~{FAKE_USER}" else p,
+        )
+        missing = str(tmp_path / "nonexistent_uploads")
+        installer = SystemdInstaller(
+            ip=FAKE_IP, token=FAKE_TOKEN, user=FAKE_USER, uploads_dir=missing
+        )
+        try:
+            installer.prepare_dirs()
+        except SDCIServerException:
+            pass
+        assert not os.path.exists(missing)
+
+    def test_accepts_explicit_existing_uploads_dir(self, tmp_path, monkeypatch):
+        home = tmp_path / "home" / FAKE_USER
+        home.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setattr(
+            "os.path.expanduser",
+            lambda p: str(home) if p == f"~{FAKE_USER}" else p,
+        )
+        existing = tmp_path / "real_uploads"
+        existing.mkdir()
+        installer = SystemdInstaller(
+            ip=FAKE_IP, token=FAKE_TOKEN, user=FAKE_USER, uploads_dir=str(existing)
         )
         # Should not raise
         installer.prepare_dirs()

@@ -7,11 +7,12 @@ filename.
 
 ## Server configuration
 
-The upload directory is set with `--upload-dir` (or the `UPLOAD_DIR` env var,
-default `./uploads`). It is created at startup if missing.
+The upload directory is set with `--uploads-dir` (or the `UPLOADS_DIR` env var —
+the legacy `UPLOAD_DIR` is still honored as a fallback — default `./uploads`). It
+is created at startup if missing.
 
 ```bash
-sdci-server --upload-dir ./uploads --server-token YOUR_TOKEN --tasks-dir ./tasks
+sdci-server serve --uploads-dir ./uploads --server-token YOUR_TOKEN --tasks-dir ./tasks
 ```
 
 ## Endpoint
@@ -46,7 +47,7 @@ The endpoint shares the global lock with task execution, so the server runs
 sdci-cli upload-asset [--token TOKEN] SERVER LOCAL_FILE REMOTE_PATH
 ```
 
-Example (lands at `<upload-dir>/releases/v1/app.zip` on the server):
+Example (lands at `<uploads-dir>/releases/v1/app.zip` on the server):
 
 ```bash
 sdci-cli upload-asset --token HAPPY123 http://localhost:8842 ./app.zip releases/v1

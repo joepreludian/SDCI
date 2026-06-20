@@ -44,7 +44,7 @@ class FileUploader:
                 f"INVALID FILENAME (contains path separator): {self._filename}"
             )
 
-        upload_dir = os.path.realpath(Settings.UPLOAD_DIR)
+        upload_dir = os.path.realpath(Settings.UPLOADS_DIR)
         candidate = os.path.realpath(
             os.path.join(upload_dir, self._remote_dir, self._filename)
         )
