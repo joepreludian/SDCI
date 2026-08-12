@@ -51,10 +51,17 @@ def run(token, server, task, args):
 
 @entrypoint.command(name="upload-asset")
 @click.option("--token", required=False, help="Token or env var SDCI_TOKEN")
+@click.option(
+    "--timeout",
+    required=False,
+    type=int,
+    default=None,
+    help="Upload timeout in seconds; defaults to the CLIENT_REQUEST_TIMEOUT env var (1800)",
+)
 @click.argument("server", required=True)
 @click.argument("local_file", required=True)
 @click.argument("remote_path", required=True)
-def upload_asset(token, server, local_file, remote_path):
+def upload_asset(token, timeout, server, local_file, remote_path):
     """Upload a single file (asset) to the server"""
     print(f"[ UPLOAD ASSET ] - Uploading {local_file} to {server} ({remote_path})...\n")
 
@@ -73,7 +80,7 @@ def upload_asset(token, server, local_file, remote_path):
         if not os.path.isfile(local_file):
             raise SDCIException(f"LOCAL FILE NOT FOUND: {local_file}")
 
-        client = SDCIClient(server, token)
+        client = SDCIClient(server, token, timeout=timeout)
         result = client.upload(local_file, remote_path)
         print(f"\n[ UPLOAD COMPLETE ] - {result.path} ({result.size} bytes)\n")
 

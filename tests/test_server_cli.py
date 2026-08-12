@@ -82,6 +82,50 @@ class TestGroupStructure:
 # ---------------------------------------------------------------------------
 
 
+class TestServeUploadTimeout:
+    def test_serve_exposes_upload_timeout_option(self):
+        """serve must accept --upload-timeout."""
+        from sdci.server import main
+
+        serve = main.commands["serve"]
+        all_opts = {opt for p in serve.params for opt in p.opts}
+
+        assert "--upload-timeout" in all_opts
+
+    def test_serve_overrides_the_upload_timeout_setting(self, tmp_path, monkeypatch):
+        """--upload-timeout must land on Settings before the server boots."""
+        from sdci.server import main
+        from sdci.settings import Settings
+
+        monkeypatch.setattr("sdci.server.uvicorn.run", lambda *args, **kwargs: None)
+        monkeypatch.setattr(Settings, "UPLOAD_TIMEOUT_SECONDS", 600)
+        monkeypatch.setattr(Settings, "SERVER_TOKEN", None)
+        monkeypatch.setattr(Settings, "TASKS_DIR", "./tasks")
+        monkeypatch.setattr(Settings, "UPLOADS_DIR", "./uploads")
+
+        tasks_dir = tmp_path / "tasks"
+        tasks_dir.mkdir()
+        (tasks_dir / "demo.sh").write_text("echo demo")
+
+        result = CliRunner().invoke(
+            main,
+            [
+                "serve",
+                "--server-token",
+                "tok",
+                "--tasks-dir",
+                str(tasks_dir),
+                "--uploads-dir",
+                str(tmp_path / "uploads"),
+                "--upload-timeout",
+                "42",
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert Settings.UPLOAD_TIMEOUT_SECONDS == 42
+
+
 class TestSetupDefaults:
     def test_setup_constructs_installer_with_expected_defaults(self, monkeypatch):
         """setup --ip X --token Y must build SystemdInstaller with correct defaults."""

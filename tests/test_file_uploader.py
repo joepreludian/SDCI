@@ -24,6 +24,23 @@ class FakeUploadFile:
         return chunk
 
 
+class BrokenUploadFile:
+    """Delivers one chunk, then fails - a dropped or cancelled transfer."""
+
+    def __init__(self, first_chunk: bytes, error: BaseException):
+        self._first_chunk = first_chunk
+        self._error = error
+        self._reads = 0
+
+    async def read(self, size: int) -> bytes:
+        self._reads += 1
+
+        if self._reads == 1:
+            return self._first_chunk
+
+        raise self._error
+
+
 def test_resolved_path_inside_upload_dir(upload_dir):
     uploader = FileUploader("releases/v1", "app.zip")
     expected = str((upload_dir / "releases" / "v1" / "app.zip").resolve())
@@ -60,6 +77,26 @@ def test_save_creates_nested_dirs_and_writes_contents(upload_dir):
     assert written == len(payload)
 
 
+def test_save_removes_partial_file_when_the_transfer_breaks(upload_dir):
+    uploader = FileUploader("releases", "app.zip")
+    upload_file = BrokenUploadFile(b"partial-data", OSError("connection reset"))
+
+    with pytest.raises(OSError):
+        asyncio.run(uploader.save(upload_file))
+
+    assert not (upload_dir / "releases" / "app.zip").exists()
+
+
+def test_save_removes_partial_file_when_cancelled(upload_dir):
+    uploader = FileUploader("releases", "app.zip")
+    upload_file = BrokenUploadFile(b"partial-data", asyncio.CancelledError())
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(uploader.save(upload_file))
+
+    assert not (upload_dir / "releases" / "app.zip").exists()
+
+
 def test_save_raises_when_destination_exists(upload_dir):
     target_dir = upload_dir / "releases"
     target_dir.mkdir()
@@ -68,3 +105,16 @@ def test_save_raises_when_destination_exists(upload_dir):
     uploader = FileUploader("releases", "app.zip")
     with pytest.raises(SDCIServerException):
         asyncio.run(uploader.save(FakeUploadFile(b"new-data")))
+
+
+def test_save_keeps_an_existing_destination_intact(upload_dir):
+    """The partial-file cleanup must never touch a file it did not create."""
+    target_dir = upload_dir / "releases"
+    target_dir.mkdir()
+    (target_dir / "app.zip").write_bytes(b"existing")
+
+    uploader = FileUploader("releases", "app.zip")
+    with pytest.raises(SDCIServerException):
+        asyncio.run(uploader.save(FakeUploadFile(b"new-data")))
+
+    assert (target_dir / "app.zip").read_bytes() == b"existing"

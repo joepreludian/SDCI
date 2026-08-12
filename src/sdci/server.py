@@ -17,6 +17,7 @@ from starlette.responses import StreamingResponse
 
 from sdci.exceptions import SDCIServerException
 from sdci.schemas import TaskOutputSchema, TaskRequestSchema, UploadOutputSchema
+from sdci.server_middleware import UploadMonitorMiddleware
 from sdci.server_runner import AvailableCommandsDescriber, CommandRunner, FileUploader
 from sdci.server_setup import SystemdInstaller
 from sdci.settings import Settings
@@ -46,6 +47,8 @@ app = FastAPI(
     version=__version__,
     lifespan=lifespan,
 )
+
+app.add_middleware(UploadMonitorMiddleware)
 
 oauth2_scheme = HTTPBearer()
 
@@ -161,12 +164,19 @@ def main():
 )
 @click.option("--tasks-dir", help="Directory with sh scripts to be executed as tasks")
 @click.option("--uploads-dir", help="Directory where uploaded files are stored")
+@click.option(
+    "--upload-timeout",
+    type=int,
+    default=None,
+    help="Seconds an upload may take before it is aborted with 408 (env UPLOAD_TIMEOUT, default 1800)",
+)
 def serve(
     host: str,
     port: int,
     server_token: str,
     tasks_dir: str = "./tasks",
     uploads_dir: str = "./uploads",
+    upload_timeout: int = None,
 ):
     """Run the SDCI server."""
     logging.config.dictConfig(
@@ -223,6 +233,9 @@ def serve(
 
     if uploads_dir:
         Settings.UPLOADS_DIR = uploads_dir
+
+    if upload_timeout:
+        Settings.UPLOAD_TIMEOUT_SECONDS = upload_timeout
 
     os.makedirs(Settings.UPLOADS_DIR, exist_ok=True)
 

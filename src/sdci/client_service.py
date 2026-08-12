@@ -33,10 +33,11 @@ class _ProgressFileReader:
 
 
 class SDCIClient:
-    def __init__(self, endpoint, token) -> None:
+    def __init__(self, endpoint, token, timeout: Optional[int] = None) -> None:
         self._client = requests.Session()
         self._endpoint = endpoint
         self._token = token
+        self._timeout = timeout or CLIENT_REQUEST_TIMEOUT_SECONDS
 
     def trigger(
         self, task_name, *args, action: Literal["run", "status"] = "run"
@@ -59,7 +60,7 @@ class SDCIClient:
                 if action == "run"
                 else {},
                 stream=action == "run",
-                timeout=CLIENT_REQUEST_TIMEOUT_SECONDS,
+                timeout=self._timeout,
             )
         except HTTPError as exc:
             raise SDCIException(f"CLIENT HTTPError: {exc}") from exc
@@ -110,7 +111,7 @@ class SDCIClient:
                         },
                         files={"file": (basename, wrapper)},
                         data={"path": remote_path},
-                        timeout=CLIENT_REQUEST_TIMEOUT_SECONDS,
+                        timeout=self._timeout,
                     )
         except Timeout as exc:
             raise SDCIException(f"CLIENT UPLOAD TIMEOUT: {exc}") from exc

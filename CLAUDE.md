@@ -35,7 +35,7 @@ Hooks: ruff (lint + format), isort (black profile), trailing-whitespace, end-of-
 
 ## Testing
 
-No unit test framework yet. Smoke tests run via Docker Compose (`make docker-testing`), which starts the server, runs a client task, and tears down.
+Unit tests live in `tests/` (plain pytest, no plugins — async code is driven with `asyncio.run()`, settings are patched with `monkeypatch.setattr(Settings, ...)`). Run them with `uv run pytest`. Smoke tests run via Docker Compose (`make docker-testing`), which starts the server, runs a client task, and tears down.
 
 ## Architecture
 
@@ -43,23 +43,25 @@ No unit test framework yet. Smoke tests run via Docker Compose (`make docker-tes
 - `GET /health` — unauthenticated liveness check (used by the Docker healthcheck)
 - `POST /tasks/{task_name}/` — executes `{TASKS_DIR}/{task_name}.sh` as async subprocess, returns streaming response (auth required)
 - `POST /tasks/{task_name}/status/` — returns task state (pid, exit_code, status) (auth required)
-- `POST /upload_file/` — multipart upload of a single file (`file: UploadFile`, `path: str` form field). Saves to `{UPLOADS_DIR}/{path}/{filename}` (dirs created recursively, original filename kept). Returns `UploadOutputSchema` (`path`, `size`, `status="UPLOADED"`). 400 on path traversal / invalid filename, 409 if destination exists, 429 if busy (auth required).
+- `POST /upload_file/` — multipart upload of a single file (`file: UploadFile`, `path: str` form field). Saves to `{UPLOADS_DIR}/{path}/{filename}` (dirs created recursively, original filename kept). Returns `UploadOutputSchema` (`path`, `size`, `status="UPLOADED"`). 400 on path traversal / invalid filename, 408 if the upload exceeds `UPLOAD_TIMEOUT_SECONDS`, 409 if destination exists, 429 if busy (auth required).
 
 Auth is Bearer token via `HTTPBearer`, compared against `Settings.SERVER_TOKEN`.
 
 A global `asyncio.Lock` enforces single-task execution — the server rejects requests with 429 while a task OR upload is running. Task state is tracked in a global `task_info_store` dict, keyed by task name. The upload endpoint acquires the same lock and releases it in a `finally`.
 
+**Upload middleware** (`src/sdci/server_middleware.py`): `UploadMonitorMiddleware` is a pure-ASGI middleware registered on the app. For `POST /upload_file/` only, it wraps `receive` to count body bytes as they arrive (feeding `UploadProgressReporter`) and wraps the downstream call in `asyncio.wait_for(Settings.UPLOAD_TIMEOUT_SECONDS)`, answering 408 on expiry. It must stay at the ASGI layer: FastAPI spools the whole multipart body before the endpoint runs, so anything measured inside the endpoint sees only the local temp→destination copy, not the transfer. Everything else passes through untouched.
+
 **Client** (`src/sdci/cli.py`): Click CLI (`sdci-cli`) with subcommands:
 - `run` — triggers a task, streams output, then polls `/status/` and exits with the task's exit code. Token resolution order: `--token` flag → `SDCI_TOKEN` env var → system keyring (`keyring.get_password("SDCI_token", server)`).
-- `upload-asset [--token] SERVER LOCAL_FILE REMOTE_PATH` — uploads a single file to `/upload_file/`, streaming it with a `click.progressbar`. Same token resolution as `run`. Maps 401/400/409/429 to `SDCIException`, exits non-zero on failure.
+- `upload-asset [--token] [--timeout] SERVER LOCAL_FILE REMOTE_PATH` — uploads a single file to `/upload_file/`, streaming it with a `click.progressbar`. Same token resolution as `run`. `--timeout` (seconds) overrides `CLIENT_REQUEST_TIMEOUT_SECONDS` for that call; it is the `requests` socket timeout, not a total budget. Maps 401/400/409/429 to `SDCIException`, exits non-zero on failure.
 - `store-token SERVER TOKEN` / `delete-token SERVER` — manage the keyring entry for a server.
 
-**Task Runner** (`src/sdci/server_runner.py`): `CommandRunner` runs `.sh` scripts from `TASKS_DIR` via `asyncio.create_subprocess_exec`, streaming stdout line-by-line. Kills the process on timeout (default 120s). `AvailableCommandsDescriber` lists available tasks by scanning for `.sh` files. `FileUploader` (chainable `.for_lock()`) validates the upload destination (`resolved_path` rejects path traversal / filenames with separators via `os.path.realpath` + `os.path.commonpath`) and streams an `UploadFile` to disk in 1 MiB chunks, refusing to overwrite an existing file.
+**Task Runner** (`src/sdci/server_runner.py`): `CommandRunner` runs `.sh` scripts from `TASKS_DIR` via `asyncio.create_subprocess_exec`, streaming stdout line-by-line. Kills the process on timeout (`TASK_RUN_TIMEOUT`, default 600s / 10 min). `AvailableCommandsDescriber` lists available tasks by scanning for `.sh` files. `FileUploader` (chainable `.for_lock()`) validates the upload destination (`resolved_path` rejects path traversal / filenames with separators via `os.path.realpath` + `os.path.commonpath`) and streams an `UploadFile` to disk in 1 MiB chunks, refusing to overwrite an existing file; if the write loop raises or is cancelled (timeout), it deletes the partial file and re-raises. `UploadProgressReporter` accumulates transferred bytes and logs `UPLOAD PROGRESS`/`UPLOAD RECEIVED` lines at most once per 2s (clock is injectable for tests); `format_bytes` renders binary units.
 
-**Settings** (`src/sdci/settings.py`): Exposes config **twice** — as module-level constants AND as a `Settings` class. The server reads `Settings.*` (so its `--server-token`/`--tasks-dir`/`--uploads-dir` flags, which mutate the class, take effect); the client reads the module-level `CLIENT_REQUEST_TIMEOUT_SECONDS` constant directly (frozen at import). When changing config behavior, update the right form. Key env vars: `SDCI_SERVER_TOKEN`, `TASK_RUN_TIMEOUT`, `CLIENT_REQUEST_TIMEOUT`, `TASKS_DIR`, `UPLOADS_DIR` (legacy `UPLOAD_DIR` still honored as a fallback).
+**Settings** (`src/sdci/settings.py`): Exposes config **twice** — as module-level constants AND as a `Settings` class. The server reads `Settings.*` (so its `--server-token`/`--tasks-dir`/`--uploads-dir`/`--upload-timeout` flags, which mutate the class, take effect); the client reads the module-level `CLIENT_REQUEST_TIMEOUT_SECONDS` constant as its default, overridable per call via `SDCIClient(..., timeout=...)`. When changing config behavior, update the right form. Numeric settings go through `env_int()`, which coerces the env string to `int` and raises `SDCIFatalException` on a non-numeric value — env vars arrive as strings and must never reach arithmetic or `requests` untyped. Key env vars: `SDCI_SERVER_TOKEN`, `TASK_RUN_TIMEOUT` (default 600), `CLIENT_REQUEST_TIMEOUT` (default 1800), `UPLOAD_TIMEOUT` (default 1800), `TASKS_DIR`, `UPLOADS_DIR` (legacy `UPLOAD_DIR` still honored as a fallback).
 
 **Entry points** (defined in `pyproject.toml`):
-- `sdci-server` → `sdci.__main__:run_server`
+- `sdci-server` → `sdci.server:main`
 - `sdci-cli` → `sdci.cli:entrypoint`
 
 ## Docker

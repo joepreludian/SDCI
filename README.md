@@ -163,7 +163,23 @@ Upload notes:
   it returns `429` while busy.
 - Path traversal is rejected (`400`) and an existing destination file is **never
   overwritten** (`409`).
-- A progress bar is shown during upload.
+- A progress bar is shown during upload, and the server logs how much data has
+  arrived every couple of seconds.
+- An upload that outlives the server's budget is aborted with `408`; the partial
+  file is discarded.
+
+Both sides accept a timeout (both default to `1800` seconds — 30 minutes):
+
+```bash
+# client: allow a very slow link up to an hour
+sdci-cli upload-asset --token HAPPY123 --timeout 3600 http://localhost:8842 ./app.zip releases/v1
+
+# server: abort uploads that take longer than an hour
+sdci-server serve --upload-timeout 3600 --server-token YOUR_TOKEN --tasks-dir ./tasks
+```
+
+Tasks have their own budget: the server kills a task that runs longer than
+`TASK_RUN_TIMEOUT` seconds (default `600` — 10 minutes).
 
 The server's upload directory is configured with the `--uploads-dir` flag (or the
 `UPLOADS_DIR` env var — the legacy `UPLOAD_DIR` is still honored as a fallback —
@@ -172,6 +188,9 @@ default `./uploads`):
 ```bash
 sdci-server serve --uploads-dir ./uploads --server-token YOUR_TOKEN --tasks-dir ./tasks
 ```
+
+See [docs/manual/file-upload.md](docs/manual/file-upload.md) for the timeout
+semantics and the progress output.
 
 
 ## 👤 Author

@@ -25,6 +25,87 @@ class AvailableCommandsDescriber:
         return available_tasks
 
 
+def format_bytes(num_bytes: float) -> str:
+    """Render a byte count using binary units, e.g. 16.0 MiB."""
+    value = float(num_bytes)
+
+    for unit in ("B", "KiB", "MiB", "GiB"):
+        if value < 1024.0:
+            return f"{value:.1f} {unit}"
+        value /= 1024.0
+
+    return f"{value:.1f} TiB"
+
+
+class UploadProgressReporter:
+    """Accumulates transferred bytes and logs progress at a bounded frequency.
+
+    The label is the client address rather than the destination file: while the
+    body is still arriving, the multipart payload holding the filename has not
+    been parsed yet.
+    """
+
+    INTERVAL_SECONDS = 2.0
+
+    def __init__(
+        self,
+        label: str,
+        total_bytes: int = None,
+        interval_seconds: float = INTERVAL_SECONDS,
+        clock=time.monotonic,
+    ) -> None:
+        self._label = label
+        self._total_bytes = total_bytes
+        self._interval_seconds = interval_seconds
+        self._clock = clock
+        self._started_at = clock()
+        self._last_report_at = self._started_at
+        self._bytes_received = 0
+
+    @property
+    def bytes_received(self) -> int:
+        return self._bytes_received
+
+    @property
+    def elapsed_seconds(self) -> float:
+        return self._clock() - self._started_at
+
+    def advance(self, chunk_size: int) -> None:
+        self._bytes_received += chunk_size
+
+        now = self._clock()
+        if now - self._last_report_at < self._interval_seconds:
+            return
+
+        self._last_report_at = now
+        logger.info(self.summary())
+
+    def summary(self) -> str:
+        received = format_bytes(self._bytes_received)
+
+        if self._total_bytes:
+            percentage = int(self._bytes_received * 100 / self._total_bytes)
+            received += f" / {format_bytes(self._total_bytes)} ({percentage}%)"
+
+        return self._with_rate(f"UPLOAD PROGRESS - {self._label} - {received}")
+
+    def finish(self) -> None:
+        logger.info(
+            self._with_rate(
+                f"UPLOAD RECEIVED - {self._label} - "
+                f"{format_bytes(self._bytes_received)} in {self.elapsed_seconds:.1f}s"
+            )
+        )
+
+    def _with_rate(self, message: str) -> str:
+        elapsed = self.elapsed_seconds
+
+        if elapsed <= 0:
+            return message
+
+        return f"{message} - {format_bytes(self._bytes_received / elapsed)}/s"
+
+
 class FileUploader:
     CHUNK_SIZE = 1024 * 1024  # 1 MiB
 
@@ -65,16 +146,30 @@ class FileUploader:
             raise SDCIServerException(f"DESTINATION FILE ALREADY EXISTS: {destination}")
 
         bytes_written = 0
-        with open(destination, "wb") as out_file:
-            while True:
-                chunk = await upload_file.read(self.CHUNK_SIZE)
-                if not chunk:
-                    break
-                out_file.write(chunk)
-                bytes_written += len(chunk)
+        try:
+            with open(destination, "wb") as out_file:
+                while True:
+                    chunk = await upload_file.read(self.CHUNK_SIZE)
+                    if not chunk:
+                        break
+                    out_file.write(chunk)
+                    bytes_written += len(chunk)
+        except BaseException:
+            # A broken or cancelled (timed out) transfer must not leave a
+            # half-written file behind; it would 409 on the next attempt.
+            self._discard_partial_file(destination)
+            raise
 
         logger.info(f"UPLOADED FILE: {destination} ({bytes_written} bytes)")
         return bytes_written
+
+    @staticmethod
+    def _discard_partial_file(destination: str) -> None:
+        try:
+            os.remove(destination)
+            logger.warning(f"DISCARDED PARTIAL UPLOAD: {destination}")
+        except OSError as exc:
+            logger.error(f"COULD NOT DISCARD PARTIAL UPLOAD {destination}: {exc}")
 
 
 class CommandRunner:
