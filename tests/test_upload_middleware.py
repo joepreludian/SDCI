@@ -105,7 +105,9 @@ def test_upload_exceeding_the_budget_is_cancelled_with_408(monkeypatch):
     assert b"UPLOAD TIMEOUT" in sent[1]["body"]
 
 
-def test_timeout_after_the_response_started_does_not_send_a_second_response(monkeypatch):
+def test_timeout_after_the_response_started_does_not_send_a_second_response(
+    monkeypatch,
+):
     monkeypatch.setattr(Settings, "UPLOAD_TIMEOUT_SECONDS", 0.05)
 
     async def stalled_after_headers_app(scope, receive, send):

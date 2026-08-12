@@ -70,10 +70,9 @@ def test_advance_logs_progress_once_the_interval_elapses(caplog):
         clock.advance(2.0)
         reporter.advance(16 * MIB)
 
-    assert (
-        caplog.messages
-        == ["UPLOAD PROGRESS - 10.0.0.4 - 16.0 MiB / 120.0 MiB (13%) - 8.0 MiB/s"]
-    )
+    assert caplog.messages == [
+        "UPLOAD PROGRESS - 10.0.0.4 - 16.0 MiB / 120.0 MiB (13%) - 8.0 MiB/s"
+    ]
 
 
 def test_advance_logs_again_only_after_another_interval(caplog):
@@ -108,7 +107,9 @@ def test_summary_omits_rate_when_no_time_has_elapsed():
 
     reporter.advance(16 * MIB)
 
-    assert reporter.summary() == "UPLOAD PROGRESS - 10.0.0.4 - 16.0 MiB / 120.0 MiB (13%)"
+    assert (
+        reporter.summary() == "UPLOAD PROGRESS - 10.0.0.4 - 16.0 MiB / 120.0 MiB (13%)"
+    )
 
 
 def test_finish_logs_the_received_total_and_elapsed_time(caplog):
@@ -120,4 +121,6 @@ def test_finish_logs_the_received_total_and_elapsed_time(caplog):
         clock.advance(4.0)
         reporter.finish()
 
-    assert caplog.messages == ["UPLOAD RECEIVED - 10.0.0.4 - 32.0 MiB in 4.0s - 8.0 MiB/s"]
+    assert caplog.messages == [
+        "UPLOAD RECEIVED - 10.0.0.4 - 32.0 MiB in 4.0s - 8.0 MiB/s"
+    ]
